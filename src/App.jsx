@@ -4,6 +4,7 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import VerifyEmail from './pages/auth/VerifyEmail';
 import CompleteKTP from './pages/ktp/CompleteKTP';
+import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
 const TestPage = () => (
@@ -73,21 +74,21 @@ const TestPage = () => (
 );
 
 // Temporary components
-const Dashboard = () => (
-  <div className="min-h-screen bg-gray-50 p-8">
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard SMART-RW</h1>
-      <div className="bg-white rounded-lg shadow p-6">
-        <p className="text-gray-600">Selamat datang di sistem manajemen RT-RW!</p>
-        <div className="mt-4 p-4 bg-green-50 rounded-lg">
-          <p className="text-green-800 text-sm">
-            ✅ Semua proses registrasi telah selesai. Anda dapat menggunakan semua fitur sistem.
-          </p>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+// const Dashboard = () => (
+//   <div className="min-h-screen bg-gray-50 p-8">
+//     <div className="max-w-4xl mx-auto">
+//       <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard SMART-RW</h1>
+//       <div className="bg-white rounded-lg shadow p-6">
+//         <p className="text-gray-600">Selamat datang di sistem manajemen RT-RW!</p>
+//         <div className="mt-4 p-4 bg-green-50 rounded-lg">
+//           <p className="text-green-800 text-sm">
+//             ✅ Semua proses registrasi telah selesai. Anda dapat menggunakan semua fitur sistem.
+//           </p>
+//         </div>
+//       </div>
+//     </div>
+//   </div>
+// );
 
 const CompleteProfile = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
