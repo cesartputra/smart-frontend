@@ -1,9 +1,10 @@
-// src/App.jsx - Updated dengan proper route protection
+// src/App.jsx - Updated dengan proper route protection dan Profile integration
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import VerifyEmail from './pages/auth/VerifyEmail';
 import CompleteKTP from './pages/ktp/CompleteKTP';
+import Profile from './pages/profile/Profile';
 import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
@@ -63,52 +64,10 @@ const TestPage = () => (
             <span className="mr-2">✅</span>
             KTP Form
           </div>
-          <div className="flex items-center text-orange-600">
-            <span className="mr-2">🔧</span>
+          <div className="flex items-center text-green-600">
+            <span className="mr-2">✅</span>
             Profile Form
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// Temporary components
-// const Dashboard = () => (
-//   <div className="min-h-screen bg-gray-50 p-8">
-//     <div className="max-w-4xl mx-auto">
-//       <h1 className="text-3xl font-bold text-gray-900 mb-6">Dashboard SMART-RW</h1>
-//       <div className="bg-white rounded-lg shadow p-6">
-//         <p className="text-gray-600">Selamat datang di sistem manajemen RT-RW!</p>
-//         <div className="mt-4 p-4 bg-green-50 rounded-lg">
-//           <p className="text-green-800 text-sm">
-//             ✅ Semua proses registrasi telah selesai. Anda dapat menggunakan semua fitur sistem.
-//           </p>
-//         </div>
-//       </div>
-//     </div>
-//   </div>
-// );
-
-const CompleteProfile = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center max-w-md mx-auto">
-      <div className="bg-white rounded-xl shadow-lg p-8">
-        <div className="mb-6">
-          <div className="mx-auto h-16 w-16 bg-orange-100 rounded-full flex items-center justify-center">
-            <svg className="h-8 w-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Lengkapi Profil</h1>
-        <p className="text-gray-600 mb-6">
-          Tahap terakhir: tambahkan nomor telepon dan tanda tangan digital Anda.
-        </p>
-        <div className="bg-orange-50 p-4 rounded-lg">
-          <p className="text-orange-800 text-sm">
-            Halaman form profil akan segera tersedia.
-          </p>
         </div>
       </div>
     </div>
@@ -137,15 +96,27 @@ function App() {
           } 
         />
         
+        {/* Profile completion - requires KTP to be completed first */}
         <Route 
           path="/complete-profile" 
           element={
             <ProtectedRoute requiresKTP>
-              <CompleteProfile />
+              <Profile />
             </ProtectedRoute>
           } 
         />
         
+        {/* Profile management - accessible after KTP completion */}
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute requiresKTP>
+              <Profile />
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Dashboard - requires both KTP and user details completion */}
         <Route 
           path="/dashboard" 
           element={
