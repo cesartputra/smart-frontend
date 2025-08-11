@@ -7,6 +7,7 @@ import CompleteKTP from './pages/ktp/CompleteKTP';
 import Profile from './pages/profile/Profile';
 import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import CompleteProfile from './pages/profile/CompleteProfile';
 
 const TestPage = () => (
   <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
@@ -101,20 +102,20 @@ function App() {
           path="/complete-profile" 
           element={
             <ProtectedRoute requiresKTP>
-              <Profile />
+              <CompleteProfile />
             </ProtectedRoute>
           } 
         />
         
         {/* Profile management - accessible after KTP completion */}
-        <Route 
+        {/* <Route 
           path="/profile" 
           element={
             <ProtectedRoute requiresKTP>
               <Profile />
             </ProtectedRoute>
           } 
-        />
+        /> */}
         
         {/* Dashboard - requires both KTP and user details completion */}
         <Route 
