@@ -19,13 +19,11 @@ const SignatureCanvas = ({ onSignatureChange, error }) => {
     const [penWidth, setPenWidth] = useState(2);
     const [canvasSize, setCanvasSize] = useState({ width: 500, height: 200 });
 
-    // Initialize canvas
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
-        const rect = canvas.getBoundingClientRect();
         
         // Set canvas size
         canvas.width = canvasSize.width;
@@ -37,11 +35,10 @@ const SignatureCanvas = ({ onSignatureChange, error }) => {
         ctx.strokeStyle = penColor;
         ctx.lineWidth = penWidth;
         
-        // Clear canvas with white background
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // CLEAR dengan transparent background (tidak fill dengan putih)
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Add border and grid for better UX
+        // Add border dan guide dengan transparent background
         ctx.strokeStyle = '#e5e7eb';
         ctx.lineWidth = 1;
         
@@ -124,41 +121,132 @@ const SignatureCanvas = ({ onSignatureChange, error }) => {
         generateSignatureData();
     }, []);
 
-    // Generate signature data and call parent callback
+    // UPDATE: Generate signature data dengan transparent background
     const generateSignatureData = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         try {
-            // Convert canvas to blob
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    const file = new File([blob], 'signature.png', { type: 'image/png' });
-                    const dataURL = canvas.toDataURL('image/png');
-                    
-                    // Call parent callback with signature data
-                    if (onSignatureChange) {
-                        onSignatureChange({
-                            file,
-                            dataURL,
-                            blob
-                        });
+            // Create temporary canvas untuk crop signature area
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Get image data from main canvas
+            const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Find bounds of actual signature (non-transparent pixels)
+            const bounds = getSignatureBounds(imageData);
+            
+            if (bounds) {
+                // Set temp canvas size to signature bounds + padding
+                const padding = 20;
+                tempCanvas.width = bounds.width + (padding * 2);
+                tempCanvas.height = bounds.height + (padding * 2);
+                
+                // Copy only the signature area to temp canvas
+                tempCtx.putImageData(
+                    canvas.getContext('2d').getImageData(
+                        bounds.minX - padding, 
+                        bounds.minY - padding, 
+                        bounds.width + (padding * 2), 
+                        bounds.height + (padding * 2)
+                    ),
+                    0, 0
+                );
+                
+                // Generate data from cropped canvas
+                tempCanvas.toBlob((blob) => {
+                    if (blob) {
+                        const file = new File([blob], 'signature.png', { type: 'image/png' });
+                        const dataURL = tempCanvas.toDataURL('image/png');
+                        
+                        // Call parent callback with cropped signature data
+                        if (onSignatureChange) {
+                            onSignatureChange({
+                                file,
+                                dataURL,
+                                blob,
+                                bounds,
+                                cropped: true
+                            });
+                        }
                     }
-                }
-            }, 'image/png', 0.9);
+                }, 'image/png', 1.0); // Maximum quality untuk signature
+            } else {
+                // No signature drawn, use full canvas
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const file = new File([blob], 'signature.png', { type: 'image/png' });
+                        const dataURL = canvas.toDataURL('image/png');
+                        
+                        if (onSignatureChange) {
+                            onSignatureChange({
+                                file,
+                                dataURL,
+                                blob,
+                                cropped: false
+                            });
+                        }
+                    }
+                }, 'image/png', 1.0);
+            }
         } catch (error) {
             console.error('Error generating signature:', error);
         }
     }, [onSignatureChange]);
 
-    // Clear canvas
+    // NEW: Function untuk find bounds signature area
+    const getSignatureBounds = useCallback((imageData) => {
+        const { data, width, height } = imageData;
+        let minX = width, minY = height, maxX = 0, maxY = 0;
+        let hasSignature = false;
+
+        // Scan untuk non-transparent pixels
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const alpha = data[(y * width + x) * 4 + 3]; // Alpha channel
+                
+                // Jika pixel tidak transparent dan bukan guide line
+                if (alpha > 0) {
+                    const r = data[(y * width + x) * 4];
+                    const g = data[(y * width + x) * 4 + 1];
+                    const b = data[(y * width + x) * 4 + 2];
+                    
+                    // Skip guide line color (#e5e7eb)
+                    if (!(r === 229 && g === 231 && b === 235)) {
+                        hasSignature = true;
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+        }
+
+        if (hasSignature) {
+            return {
+                minX,
+                minY,
+                maxX,
+                maxY,
+                width: maxX - minX,
+                height: maxY - minY
+            };
+        }
+
+        return null;
+    }, []);
+
+    // UPDATE: Clear canvas dengan transparent background
     const clearCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Clear dengan transparent background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
         // Redraw border and guide
         ctx.strokeStyle = '#e5e7eb';
@@ -180,16 +268,48 @@ const SignatureCanvas = ({ onSignatureChange, error }) => {
         }
     }, [onSignatureChange]);
 
-    // Download signature
+    // UPDATE: Download signature dengan transparent background
     const downloadSignature = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas || !hasSignature) return;
 
-        const link = document.createElement('a');
-        link.download = 'tanda-tangan.png';
-        link.href = canvas.toDataURL();
-        link.click();
-    }, [hasSignature]);
+        // Create temporary canvas untuk download
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Get image data and find bounds
+        const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+        const bounds = getSignatureBounds(imageData);
+        
+        if (bounds) {
+            const padding = 20;
+            tempCanvas.width = bounds.width + (padding * 2);
+            tempCanvas.height = bounds.height + (padding * 2);
+            
+            // Copy cropped signature
+            tempCtx.putImageData(
+                canvas.getContext('2d').getImageData(
+                    bounds.minX - padding, 
+                    bounds.minY - padding, 
+                    bounds.width + (padding * 2), 
+                    bounds.height + (padding * 2)
+                ),
+                0, 0
+            );
+            
+            // Download cropped signature
+            const link = document.createElement('a');
+            link.download = 'tanda-tangan-transparan.png';
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
+        } else {
+            // Fallback to full canvas
+            const link = document.createElement('a');
+            link.download = 'tanda-tangan.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    }, [hasSignature, getSignatureBounds]);
 
     // Mouse events
     useEffect(() => {
@@ -222,8 +342,16 @@ const SignatureCanvas = ({ onSignatureChange, error }) => {
         <div className="space-y-4">
             {/* Canvas Container */}
             <div className={`relative border-2 border-dashed rounded-lg overflow-hidden ${
-                error ? 'border-red-300' : hasSignature ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-gray-50'
-            }`}>
+                error ? 'border-red-300' : hasSignature ? 'border-green-300 bg-green-50' : 'border-gray-300'
+            }`}
+            style={{
+                // Checkerboard pattern untuk show transparency
+                backgroundImage: hasSignature ? 
+                    'linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%)' :
+                    'none',
+                backgroundSize: hasSignature ? '20px 20px' : 'auto',
+                backgroundPosition: hasSignature ? '0 0, 0 10px, 10px -10px, -10px 0px' : 'auto'
+            }}>
                 {/* Instructions overlay */}
                 {!hasSignature && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">

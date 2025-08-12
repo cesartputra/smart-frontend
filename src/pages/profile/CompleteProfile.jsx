@@ -93,64 +93,86 @@ const CompleteProfile = () => {
         trigger('signature_data');
     };
 
-    // Simulate upload signature to backend (akan dihandle backend nanti)
     const uploadSignature = async (signatureData) => {
         setIsUploadingSignature(true);
         
         try {
-            // Simulate upload process
-            console.log('Uploading signature...', {
+            console.log('Preparing signature for upload...', {
                 hasFile: !!signatureData.file,
                 hasDataURL: !!signatureData.dataURL,
                 fileSize: signatureData.file?.size
             });
             
-            // Mock upload delay
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-            // In real implementation, you would:
-            // 1. Upload file to storage (AWS S3, Cloudinary, etc.)
-            // 2. Get back the URL
-            // 3. Return the URL to store in database
-            
-            const mockSignatureUrl = `https://storage.smartrw.com/signatures/${user.id}_${Date.now()}.png`;
-            
-            console.log('Signature uploaded successfully:', mockSignatureUrl);
-            return mockSignatureUrl;
+            // Return the dataURL to be sent to backend
+            return signatureData.dataURL;
             
         } catch (error) {
-            console.error('Error uploading signature:', error);
+            console.error('Error preparing signature:', error);
             throw error;
         } finally {
             setIsUploadingSignature(false);
         }
     };
 
+    // // Simulate upload signature to backend (akan dihandle backend nanti)
+    // const uploadSignature = async (signatureData) => {
+    //     setIsUploadingSignature(true);
+        
+    //     try {
+    //         // Simulate upload process
+    //         console.log('Uploading signature...', {
+    //             hasFile: !!signatureData.file,
+    //             hasDataURL: !!signatureData.dataURL,
+    //             fileSize: signatureData.file?.size
+    //         });
+            
+    //         // Mock upload delay
+    //         await new Promise(resolve => setTimeout(resolve, 1500));
+            
+    //         // In real implementation, you would:
+    //         // 1. Upload file to storage (AWS S3, Cloudinary, etc.)
+    //         // 2. Get back the URL
+    //         // 3. Return the URL to store in database
+            
+    //         const mockSignatureUrl = `https://storage.smartrw.com/signatures/${user.id}_${Date.now()}.png`;
+            
+    //         console.log('Signature uploaded successfully:', mockSignatureUrl);
+    //         return mockSignatureUrl;
+            
+    //     } catch (error) {
+    //         console.error('Error uploading signature:', error);
+    //         throw error;
+    //     } finally {
+    //         setIsUploadingSignature(false);
+    //     }
+    // };
+
     const onSubmit = async (data) => {
         try {
-            let signatureUrl = null;
+            let signatureBase64 = null;
             
-            // Upload signature if exists
+            // Get signature base64 if exists
             if (signatureData) {
                 try {
-                    signatureUrl = await uploadSignature(signatureData);
+                    signatureBase64 = await uploadSignature(signatureData);
                 } catch (error) {
-                    toast.error('Gagal mengunggah tanda tangan');
+                    toast.error('Gagal memproses tanda tangan');
                     return;
                 }
             }
             
-            // Prepare data for backend
+            // Prepare data for backend - UPDATED
             const profileData = {
                 phone_number: data.phone_number,
-                signature_url: signatureUrl
+                signature_base64: signatureBase64 // Send base64 instead of URL
             };
             
-            console.log('Submitting profile data:', profileData);
+            console.log('Submitting profile data:', {
+                phone_number: profileData.phone_number,
+                hasSignature: !!profileData.signature_base64
+            });
             
             await createUserDetails(profileData);
-            
-            // Success akan dihandle oleh hook useAuth → redirect ke dashboard
             
         } catch (error) {
             console.error('Profile completion error:', error);
