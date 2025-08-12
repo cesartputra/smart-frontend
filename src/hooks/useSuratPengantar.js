@@ -1,4 +1,4 @@
-// src/hooks/useSuratPengantar.js
+// src/hooks/useSuratPengantar.js - UPDATED dengan admin API calls
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -143,7 +143,7 @@ export const useSuratPengantar = () => {
         },
     });
 
-    // Statistics query
+    // Statistics query (existing)
     const statisticsQuery = useQuery({
         queryKey: ['surat-pengantar-statistics'],
         queryFn: () => suratPengantarService.getRTStatistics(),
@@ -151,6 +151,29 @@ export const useSuratPengantar = () => {
         retry: 2,
         onError: (error) => {
             console.error('❌ Statistics query error:', error);
+        }
+    });
+
+    // NEW: Admin Statistics query
+    const adminStatisticsQuery = useQuery({
+        queryKey: ['admin-surat-pengantar-statistics'],
+        queryFn: () => suratPengantarService.getAdminStatistics(),
+        enabled: false,
+        retry: 2,
+        onError: (error) => {
+            console.error('❌ Admin statistics query error:', error);
+        }
+    });
+
+    // NEW: Admin Requests query
+    const adminRequestsQuery = useQuery({
+        queryKey: ['admin-surat-pengantar-requests'],
+        queryFn: () => suratPengantarService.getAdminRequests(),
+        enabled: false,
+        retry: 2,
+        keepPreviousData: true,
+        onError: (error) => {
+            console.error('❌ Admin requests query error:', error);
         }
     });
 
@@ -222,12 +245,30 @@ export const useSuratPengantar = () => {
         rwApproval: rwApprovalMutation.mutate,
         isRWProcessing: rwApprovalMutation.isPending,
 
-        // Statistics
+        // Statistics (existing)
         statistics: statisticsQuery.data || {},
         statisticsLoading: statisticsQuery.isFetching,
         fetchStatistics: (params) => {
             statisticsQuery.refetch({
                 queryFn: () => suratPengantarService.getRTStatistics(params)
+            });
+        },
+
+        // NEW: Admin Statistics
+        adminStatistics: adminStatisticsQuery.data || {},
+        adminStatisticsLoading: adminStatisticsQuery.isFetching,
+        fetchAdminStatistics: (params) => {
+            adminStatisticsQuery.refetch({
+                queryFn: () => suratPengantarService.getAdminStatistics(params)
+            });
+        },
+
+        // NEW: Admin Requests
+        adminRequests: adminRequestsQuery.data || { data: [], pagination: {} },
+        adminRequestsLoading: adminRequestsQuery.isFetching,
+        fetchAdminRequests: (params) => {
+            adminRequestsQuery.refetch({
+                queryFn: () => suratPengantarService.getAdminRequests(params)
             });
         },
 
