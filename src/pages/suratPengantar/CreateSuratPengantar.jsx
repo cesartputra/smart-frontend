@@ -1,4 +1,4 @@
-// src/pages/suratPengantar/CreateSuratPengantar.jsx - IMPROVED VERSION
+// src/pages/suratPengantar/CreateSuratPengantar.jsx - PROPERLY FIXED VERSION
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -15,11 +15,9 @@ import {
     FileIcon,
     ChevronDown,
     Info,
-    Calendar,
     RefreshCw
 } from 'lucide-react';
 import { useSuratPengantar } from '../../hooks/useSuratPengantar';
-import { useKtp } from '../../hooks/useKtp';
 import { useKartuKeluarga } from '../../hooks/useKartuKeluarga';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { toast } from 'react-hot-toast';
@@ -43,9 +41,7 @@ const suratPengantarSchema = yup.object({
 const CreateSuratPengantar = () => {
     const navigate = useNavigate();
     const [selectedCategory, setSelectedCategory] = useState(null);
-    const [familyMembers, setFamilyMembers] = useState([]);
     const [reasonLength, setReasonLength] = useState(0);
-    const [isLoading, setIsLoading] = useState(false);
     
     const { 
         categories, 
@@ -56,11 +52,13 @@ const CreateSuratPengantar = () => {
         isCreating 
     } = useSuratPengantar();
 
+    // ✅ CORRECT: Menggunakan hook useKartuKeluarga sesuai implementasi yang benar
     const { 
-        myFamily, 
-        isLoading: familyLoading, 
-        error: familyError, 
-        getMyFamily 
+        familyData,           // Data keluarga yang sudah diformat
+        familyLoading,        // Loading state
+        familyError,          // Error state
+        refreshMyFamily,      // Function untuk refresh data
+        getRelationshipText   // Utility function
     } = useKartuKeluarga();
 
     const {
@@ -83,7 +81,7 @@ const CreateSuratPengantar = () => {
     const watchedUserKtpId = watch('user_ktp_id');
     const watchedReason = watch('reason');
 
-    // ✅ FIXED: Fetch categories only once on mount
+    // ✅ Fetch categories only once on mount
     useEffect(() => {
         if (categories.length === 0 && !categoriesLoading && !categoriesError) {
             fetchCategories();
@@ -106,71 +104,23 @@ const CreateSuratPengantar = () => {
         setReasonLength(watchedReason ? watchedReason.length : 0);
     }, [watchedReason]);
 
-    // Fetch family members with better error handling
+    // ✅ CORRECT: Auto-select user when family data is available
     useEffect(() => {
-        const fetchFamilyMembers = async () => {
-            try {
-                await getMyFamily();
-                
-                if (myFamily && myFamily.length > 0) {
-                    // Format members data for the form
-                    const formattedMembers = myFamily.map(member => ({
-                        ...kartuKeluargaService.formatMemberData(member),
-                        id: member.id,
-                        full_name: member.name || member.full_name,
-                        is_current_user: member.is_kepala_keluarga || member.hubungan_keluarga === 'KEPALA_KELUARGA'
-                    }));
-                    
-                    const sortedMembers = kartuKeluargaService.sortMembersByHierarchy(formattedMembers);
-                    setFamilyMembers(sortedMembers);
-                    
-                    // Auto-select current user or first family member
-                    const selectedMember = sortedMembers.find(member => member.is_current_user) || sortedMembers[0];
-                    setValue('user_ktp_id', selectedMember.id);
-                } else {
-                    handleEmptyFamilyData();
-                }
-            } catch (error) {
-                handleFetchError(error);
+        if (familyData?.members && familyData.members.length > 0 && !watchedUserKtpId) {
+            // Cari user saat ini berdasarkan flag is_current_user atau kepala keluarga
+            const currentUser = familyData.members.find(member => {
+                return member.is_current_user === true || 
+                       member.hubungan_keluarga === 'KEPALA_KELUARGA';
+            });
+            
+            // Pilih current user atau member pertama sebagai default
+            const selectedMember = currentUser || familyData.members[0];
+            
+            if (selectedMember?.id) {
+                setValue('user_ktp_id', selectedMember.id.toString());
             }
-        };
-    
-        const handleEmptyFamilyData = () => {
-            toast.warning('Data anggota keluarga tidak ditemukan');
-            setFamilyMembers([]);
-        };
-    
-        const handleFetchError = (error) => {
-            console.error('Error fetching family members:', error);
-            
-            const errorMessage = error.message || 'Gagal memuat data anggota keluarga';
-            const errorMap = {
-                'complete your KTP': 'Silakan lengkapi data KTP Anda terlebih dahulu',
-                'complete your user details': 'Silakan lengkapi profil Anda terlebih dahulu',
-                'verify your email': 'Silakan verifikasi email Anda terlebih dahulu'
-            };
-            
-            const specificError = Object.keys(errorMap).find(key => errorMessage.includes(key));
-            toast.error(specificError ? errorMap[specificError] : errorMessage);
-            
-            setFamilyMembers([]);
-        };
-    
-        fetchFamilyMembers();
-    }, [setValue, getMyFamily, myFamily]);
-
-    // Update loading state based on hook
-    useEffect(() => {
-        setIsLoading(familyLoading);
-    }, [familyLoading]);
-
-    // Handle hook errors
-    useEffect(() => {
-        if (familyError) {
-            console.error('Family hook error:', familyError);
-            toast.error(familyError);
         }
-    }, [familyError]);
+    }, [familyData, setValue, watchedUserKtpId]);
 
     const onSubmit = async (data) => {
         console.log('Creating surat pengantar:', data);
@@ -178,6 +128,12 @@ const CreateSuratPengantar = () => {
         // Validate selected category exists
         if (!selectedCategory) {
             toast.error('Kategori surat tidak valid');
+            return;
+        }
+
+        // Validate family member is selected
+        if (!data.user_ktp_id) {
+            toast.error('Pemohon wajib dipilih');
             return;
         }
 
@@ -205,14 +161,31 @@ const CreateSuratPengantar = () => {
         fetchCategories();
     };
 
+    const handleRetryFamily = () => {
+        refreshMyFamily();
+    };
+
     const resetForm = () => {
         reset();
         setSelectedCategory(null);
         setReasonLength(0);
+        
+        // Re-select default family member if available
+        if (familyData?.members && familyData.members.length > 0) {
+            const currentUser = familyData.members.find(member => 
+                member.is_current_user === true || 
+                member.hubungan_keluarga === 'KEPALA_KELUARGA'
+            );
+            const selectedMember = currentUser || familyData.members[0];
+            
+            if (selectedMember?.id) {
+                setValue('user_ktp_id', selectedMember.id.toString());
+            }
+        }
     };
 
     // Loading state
-    if (categoriesLoading) {
+    if (categoriesLoading && !categories.length) {
         return (
             <div className="min-h-screen bg-gray-50 py-8">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -256,7 +229,7 @@ const CreateSuratPengantar = () => {
                 </div>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-                    {/* ✅ NEW: Dropdown Category Selection */}
+                    {/* Category Selection */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center mb-6">
                             <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
@@ -292,7 +265,7 @@ const CreateSuratPengantar = () => {
                             </div>
                         )}
 
-                        {/* ✅ NEW: Dropdown Selector */}
+                        {/* Dropdown Selector */}
                         <div className="relative">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Kategori Surat <span className="text-red-500">*</span>
@@ -328,7 +301,7 @@ const CreateSuratPengantar = () => {
                             )}
                         </div>
 
-                        {/* ✅ IMPROVED: Category Details Card */}
+                        {/* Category Details Card */}
                         {selectedCategory && (
                             <div className="mt-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
                                 <div className="flex items-start">
@@ -371,7 +344,7 @@ const CreateSuratPengantar = () => {
                         )}
                     </div>
 
-                    {/* ✅ IMPROVED: Family Member Selection */}
+                    {/* ✅ CORRECTLY FIXED: Family Member Selection */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center mb-6">
                             <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
@@ -387,61 +360,123 @@ const CreateSuratPengantar = () => {
                             </div>
                         </div>
 
-                        <div className="space-y-3">
-                            {familyMembers.map((member) => (
-                                <div key={member.id} className="relative">
-                                    <input
-                                        {...register('user_ktp_id')}
-                                        type="radio"
-                                        id={`member-${member.id}`}
-                                        value={member.id}
-                                        className="sr-only"
-                                    />
-                                    <label
-                                        htmlFor={`member-${member.id}`}
-                                        className={`block w-full p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                                            watchedUserKtpId === member.id
-                                                ? 'border-purple-500 bg-purple-50 shadow-sm'
-                                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        <div className="flex items-center">
-                                            <div className={`h-5 w-5 rounded-full border-2 mr-3 flex items-center justify-center ${
-                                                watchedUserKtpId === member.id
-                                                    ? 'border-purple-500 bg-purple-500'
-                                                    : 'border-gray-300'
-                                            }`}>
-                                                {watchedUserKtpId === member.id && (
-                                                    <div className="h-2 w-2 bg-white rounded-full"></div>
-                                                )}
-                                            </div>
-                                            <User className="h-5 w-5 text-gray-400 mr-3" />
-                                            <div className="flex-1">
-                                                <div className="flex items-center">
-                                                    <h4 className="font-medium text-gray-900">
-                                                        {member.full_name}
-                                                    </h4>
-                                                    {member.is_current_user && (
-                                                        <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                                                            Anda
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center mt-1 text-sm text-gray-500">
-                                                    <span>NIK: {member.nik?.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-****-****-$4')}</span>
-                                                    {member.relationship && (
-                                                        <>
-                                                            <span className="mx-2">•</span>
-                                                            <span>{member.relationship}</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
+                        {/* Family Loading State */}
+                        {familyLoading && (
+                            <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mr-3"></div>
+                                <span className="text-gray-600">Memuat data anggota keluarga...</span>
+                            </div>
+                        )}
+
+                        {/* Family Error State */}
+                        {familyError && !familyLoading && (
+                            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center">
+                                        <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+                                        <div className="text-sm text-red-800">
+                                            <p className="font-medium">Gagal memuat data anggota keluarga</p>
+                                            <p className="text-red-600 mt-1">
+                                                {familyError.includes?.('404') ? 
+                                                    'Data keluarga belum terdaftar. Silakan hubungi admin RT/RW.' :
+                                                    'Terjadi kesalahan saat memuat data.'
+                                                }
+                                            </p>
                                         </div>
-                                    </label>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleRetryFamily}
+                                        className="flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors duration-200"
+                                    >
+                                        <RefreshCw className="h-4 w-4 mr-1" />
+                                        Coba Lagi
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        )}
+
+                        {/* Family Members List */}
+                        {!familyLoading && !familyError && familyData?.members && familyData.members.length > 0 && (
+                            <div className="space-y-3">
+                                {familyData.members.map((member) => (
+                                    <div key={member.id} className="relative">
+                                        <input
+                                            {...register('user_ktp_id')}
+                                            type="radio"
+                                            id={`member-${member.id}`}
+                                            value={member.id.toString()}
+                                            className="sr-only"
+                                        />
+                                        <label
+                                            htmlFor={`member-${member.id}`}
+                                            className={`block w-full p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                                watchedUserKtpId === member.id.toString()
+                                                    ? 'border-purple-500 bg-purple-50 shadow-sm'
+                                                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <div className="flex items-center">
+                                                <div className={`h-5 w-5 rounded-full border-2 mr-3 flex items-center justify-center ${
+                                                    watchedUserKtpId === member.id.toString()
+                                                        ? 'border-purple-500 bg-purple-500'
+                                                        : 'border-gray-300'
+                                                }`}>
+                                                    {watchedUserKtpId === member.id.toString() && (
+                                                        <div className="h-2 w-2 bg-white rounded-full"></div>
+                                                    )}
+                                                </div>
+                                                <User className="h-5 w-5 text-gray-400 mr-3" />
+                                                <div className="flex-1">
+                                                    <div className="flex items-center">
+                                                        <h4 className="font-medium text-gray-900">
+                                                            {member.name || member.full_name || 'Nama tidak tersedia'}
+                                                        </h4>
+                                                        {(member.is_current_user || member.hubungan_keluarga === 'KEPALA_KELUARGA') && (
+                                                            <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                                                                {member.is_current_user ? 'Anda' : 'Kepala Keluarga'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center mt-1 text-sm text-gray-500">
+                                                        {member.nik && (
+                                                            <span>NIK: {member.nik.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-****-****-$4')}</span>
+                                                        )}
+                                                        {member.hubungan_keluarga && (
+                                                            <>
+                                                                <span className="mx-2">•</span>
+                                                                <span>{getRelationshipText(member.hubungan_keluarga)}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* No Family Data */}
+                        {!familyLoading && !familyError && (!familyData?.members || familyData.members.length === 0) && (
+                            <div className="text-center py-8">
+                                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                <h4 className="text-lg font-medium text-gray-900 mb-2">
+                                    Tidak ada data anggota keluarga
+                                </h4>
+                                <p className="text-gray-500 mb-4">
+                                    Silakan hubungi admin RT/RW untuk mendaftarkan data keluarga Anda.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleRetryFamily}
+                                    className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
+                                >
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Refresh Data
+                                </button>
+                            </div>
+                        )}
 
                         {errors.user_ktp_id && (
                             <p className="mt-2 text-sm text-red-600">
@@ -450,7 +485,7 @@ const CreateSuratPengantar = () => {
                         )}
                     </div>
 
-                    {/* ✅ IMPROVED: Reason Section */}
+                    {/* Reason Section */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <div className="flex items-center mb-6">
                             <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
@@ -498,7 +533,7 @@ const CreateSuratPengantar = () => {
                         </div>
                     </div>
 
-                    {/* ✅ IMPROVED: Submit Section */}
+                    {/* Submit Section */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                         <div className="flex flex-col sm:flex-row gap-4">
                             <button
@@ -518,7 +553,14 @@ const CreateSuratPengantar = () => {
                             
                             <button
                                 type="submit"
-                                disabled={isCreating || !selectedCategory || reasonLength < 10}
+                                disabled={
+                                    isCreating || 
+                                    !selectedCategory || 
+                                    reasonLength < 10 || 
+                                    !watchedUserKtpId ||
+                                    familyLoading ||
+                                    familyError
+                                }
                                 className="flex-2 py-3 px-8 bg-gradient-to-r from-green-600 to-blue-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
                             >
                                 {isCreating ? (
@@ -537,7 +579,7 @@ const CreateSuratPengantar = () => {
                     </div>
                 </form>
 
-                {/* ✅ IMPROVED: Information Panel */}
+                {/* Information Panel */}
                 <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <div className="flex items-start">
                         <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
@@ -548,16 +590,6 @@ const CreateSuratPengantar = () => {
                                 ℹ️ Informasi Penting
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                                <div className="space-y-3">
-                                    <div className="flex items-start">
-                                        <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <p>Pengajuan akan diproses berurutan oleh RT kemudian RW</p>
-                                    </div>
-                                    <div className="flex items-start">
-                                        <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-                                        <p>Pastikan alasan pengajuan jelas dan sesuai dengan kebutuhan</p>
-                                    </div>
-                                </div>
                                 <div className="space-y-3">
                                     <div className="flex items-start">
                                         <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>

@@ -1,22 +1,30 @@
-// src/services/KartuKeluargaService.js
+// src/services/kartuKeluargaService.js - FIXED TO MATCH BACKEND ENDPOINTS
 import api from './api';
 
 const kartuKeluargaService = {
     /**
      * Get my family members
-     * Endpoint: GET /api/kartu-keluarga/my-family
+     * Endpoint: GET /api/kk/my-family
      * Requires: Full Profile (Auth + Email + KTP + User Details)
+     * 
+     * BACKEND CONTROLLER: KartuKeluargaController.getMyFamily
+     * - Gets user's KTP through UserKtpService.getKTP(req.userId)
+     * - Gets family details through KartuKeluargaService.getDetails(userKtp.kartu_keluarga_id)
+     * - Returns complete KK details with members
      */
     getMyFamily: async () => {
         console.log('KartuKeluargaService.getMyFamily called');
         try {
-            const response = await api.get('/api/kartu-keluarga/my-family');
+            const response = await api.get('/api/kk/my-family');
             console.log('GetMyFamily response:', response.data);
             return response.data;
         } catch (error) {
             console.error('KartuKeluargaService.getMyFamily error:', error);
             
-            // Handle specific error cases
+            // Handle specific error cases sesuai backend controller
+            if (error.response?.status === 404) {
+                throw new Error('KTP data not found');
+            }
             if (error.response?.status === 403) {
                 const errorData = error.response.data;
                 if (errorData.requiresKTPCompletion) {
@@ -28,6 +36,7 @@ const kartuKeluargaService = {
                 if (errorData.requiresEmailVerification) {
                     throw new Error('Please verify your email first');
                 }
+                throw new Error('Access denied');
             }
             
             throw error;
@@ -36,8 +45,12 @@ const kartuKeluargaService = {
 
     /**
      * Get KK details by ID
-     * Endpoint: GET /api/kartu-keluarga/:kkId
+     * Endpoint: GET /api/kk/:kkId
      * Requires: Full Profile
+     * 
+     * BACKEND CONTROLLER: KartuKeluargaController.getDetails
+     * - Gets KK by ID through KartuKeluargaService.getById(kkId)
+     * - Gets complete details through KartuKeluargaService.getDetails(kk.id)
      */
     getDetails: async (kkId) => {
         console.log('KartuKeluargaService.getDetails called with kkId:', kkId);
@@ -47,7 +60,7 @@ const kartuKeluargaService = {
         }
         
         try {
-            const response = await api.get(`/api/kartu-keluarga/${kkId}`);
+            const response = await api.get(`/api/kk/${kkId}`);
             console.log('GetDetails response:', response.data);
             return response.data;
         } catch (error) {
@@ -56,6 +69,9 @@ const kartuKeluargaService = {
             if (error.response?.status === 404) {
                 throw new Error('Kartu Keluarga tidak ditemukan');
             }
+            if (error.response?.status === 403) {
+                throw new Error('Access denied');
+            }
             
             throw error;
         }
@@ -63,8 +79,12 @@ const kartuKeluargaService = {
 
     /**
      * Validate KK for joining
-     * Endpoint: POST /api/kartu-keluarga/validate
+     * Endpoint: POST /api/kk/validate
      * Requires: Verified User (Auth + Email + Active)
+     * 
+     * BACKEND CONTROLLER: KartuKeluargaController.validateKK
+     * - Validates through KartuKeluargaService.validateJoinKK(kkNo, rtId)
+     * - Returns { valid: true, kkId: kk.id }
      */
     validateKK: async (kkNo, rtId) => {
         console.log('KartuKeluargaService.validateKK called with:', { kkNo, rtId });
@@ -86,7 +106,7 @@ const kartuKeluargaService = {
         }
         
         try {
-            const response = await api.post('/api/kartu-keluarga/validate', {
+            const response = await api.post('/api/kk/validate', {
                 kkNo: kkNo.trim(),
                 rtId: rtIdNum
             });
@@ -95,7 +115,7 @@ const kartuKeluargaService = {
         } catch (error) {
             console.error('KartuKeluargaService.validateKK error:', error);
             
-            // Handle specific validation errors
+            // Handle specific validation errors sesuai backend service
             if (error.response?.status === 400) {
                 const errorMessage = error.response.data?.message;
                 if (errorMessage?.includes('16 digits')) {
@@ -120,8 +140,12 @@ const kartuKeluargaService = {
 
     /**
      * Check KK availability
-     * Endpoint: GET /api/kartu-keluarga/check/:kkNo
+     * Endpoint: GET /api/kk/check/:kkNo
      * Requires: Verified User
+     * 
+     * BACKEND CONTROLLER: KartuKeluargaController.checkAvailability
+     * - Checks through KartuKeluargaService.isKKAvailable(kkNo)
+     * - Returns { available: boolean, kkNo: string }
      */
     checkAvailability: async (kkNo) => {
         console.log('KartuKeluargaService.checkAvailability called with kkNo:', kkNo);
@@ -136,7 +160,7 @@ const kartuKeluargaService = {
         }
         
         try {
-            const response = await api.get(`/api/kartu-keluarga/check/${kkNo.trim()}`);
+            const response = await api.get(`/api/kk/check/${kkNo.trim()}`);
             console.log('CheckAvailability response:', response.data);
             return response.data;
         } catch (error) {
@@ -152,8 +176,11 @@ const kartuKeluargaService = {
 
     /**
      * Get KK statistics for RT
-     * Endpoint: GET /api/kartu-keluarga/statistics/:rtId
+     * Endpoint: GET /api/kk/statistics/:rtId
      * Requires: Full Profile
+     * 
+     * BACKEND CONTROLLER: KartuKeluargaController.getStatistics
+     * - Gets stats through KartuKeluargaService.getKKStatistics(parseInt(rtId))
      */
     getStatistics: async (rtId) => {
         console.log('KartuKeluargaService.getStatistics called with rtId:', rtId);
@@ -168,7 +195,7 @@ const kartuKeluargaService = {
         }
         
         try {
-            const response = await api.get(`/api/kartu-keluarga/statistics/${rtIdNum}`);
+            const response = await api.get(`/api/kk/statistics/${rtIdNum}`);
             console.log('GetStatistics response:', response.data);
             return response.data;
         } catch (error) {
@@ -177,6 +204,9 @@ const kartuKeluargaService = {
             if (error.response?.status === 403) {
                 throw new Error('Anda tidak memiliki akses untuk melihat statistik ini');
             }
+            if (error.response?.status === 400) {
+                throw new Error('RT ID tidak valid');
+            }
             
             throw error;
         }
@@ -184,6 +214,7 @@ const kartuKeluargaService = {
 
     /**
      * Helper function to format KK number for display
+     * Format: XXXX.XXXX.XXXX.XXXX
      */
     formatKKNumber: (kkNo) => {
         if (!kkNo || typeof kkNo !== 'string') return kkNo;
@@ -194,6 +225,7 @@ const kartuKeluargaService = {
 
     /**
      * Helper function to validate KK number format
+     * Sesuai dengan validasi di backend service
      */
     validateKKFormat: (kkNo) => {
         if (!kkNo) {
@@ -217,6 +249,7 @@ const kartuKeluargaService = {
 
     /**
      * Helper function to get relationship status in Indonesian
+     * Sesuai dengan enum yang ada di backend
      */
     getRelationshipText: (relationship) => {
         const relationships = {
@@ -237,6 +270,7 @@ const kartuKeluargaService = {
 
     /**
      * Helper function to get registration status text
+     * Sesuai dengan enum registration_status di backend
      */
     getRegistrationStatusText: (status) => {
         const statuses = {
@@ -261,6 +295,7 @@ const kartuKeluargaService = {
 
     /**
      * Helper function to format member data for display
+     * Menggunakan data structure yang dikembalikan dari backend
      */
     formatMemberData: (member) => {
         if (!member) return null;
@@ -300,6 +335,7 @@ const kartuKeluargaService = {
 
     /**
      * Helper function to sort family members by hierarchy
+     * Sesuai dengan urutan yang digunakan di backend model
      */
     sortMembersByHierarchy: (members) => {
         if (!Array.isArray(members)) return [];
