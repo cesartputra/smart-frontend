@@ -42,17 +42,24 @@ const SuratPengantarList = () => {
         validatePagination
     } = useSuratPengantar();
 
-    // Memoized query parameters dengan validation
+    // PERBAIKAN: Tambahkan fallback untuk validation functions
     const queryParams = useMemo(() => {
-        const validated = validatePagination ? validatePagination(currentPage, limit) : { page: currentPage, limit };
         const params = {
-            page: validated.page,
-            limit: validated.limit
+            page: currentPage,
+            limit: limit
         };
 
-        // Add filters only if they have valid values
-        if (statusFilter && validateStatus && validateStatus(statusFilter)) {
-            params.status = statusFilter;
+        // PERBAIKAN: Tambahkan fallback jika validateStatus tidak tersedia
+        if (statusFilter) {
+            if (validateStatus && validateStatus(statusFilter)) {
+                params.status = statusFilter;
+            } else if (!validateStatus) {
+                // Fallback validation
+                const validStatuses = ['DRAFT', 'SUBMITTED', 'RT_APPROVED', 'COMPLETED', 'REJECTED'];
+                if (validStatuses.includes(statusFilter)) {
+                    params.status = statusFilter;
+                }
+            }
         }
 
         if (searchTerm && searchTerm.trim().length >= 2) {
@@ -74,16 +81,27 @@ const SuratPengantarList = () => {
             params.sortOrder = sortOrder;
         }
 
-        return params;
-    }, [currentPage, limit, statusFilter, searchTerm, categoryFilter, sortBy, sortOrder, validateStatus, validatePagination]);
+        // TAMBAHAN: Log params untuk debugging
+        console.log('Query params:', params);
 
-    // Use the refactored hook - dengan fallback jika hook tidak tersedia
+        return params;
+    }, [currentPage, limit, statusFilter, searchTerm, categoryFilter, sortBy, sortOrder, validateStatus]);
+
+    // PERBAIKAN: Tambahkan error handling
     const myRequestsQuery = useMyRequests ? useMyRequests(queryParams) : { 
         data: null, 
         isLoading: false, 
         isFetching: false, 
+        error: null,
         refetch: () => {} 
     };
+
+    // TAMBAHAN: Log query state untuk debugging
+    console.log('myRequestsQuery state:', {
+        data: myRequestsQuery.data,
+        isLoading: myRequestsQuery.isLoading,
+        error: myRequestsQuery.error
+    });
 
     // Fetch categories on mount
     useEffect(() => {
@@ -97,50 +115,57 @@ const SuratPengantarList = () => {
         setCurrentPage(1);
     }, [statusFilter, searchTerm, categoryFilter, sortBy, sortOrder]);
 
-    // FIXED: Memoized data dengan proper array validation
+    // PERBAIKAN: Tambahkan logging dan struktur response yang lebih robust
     const requestsData = useMemo(() => {
-        console.log('Raw myRequestsQuery.data:', myRequestsQuery.data); // Debug log
+        console.log('Raw myRequestsQuery.data:', myRequestsQuery.data);
         
         if (!myRequestsQuery.data) {
-            return { data: [], pagination: { total: 0, totalPages: 0 } };
+            return { data: [], pagination: { total: 0, totalPages: 0, currentPage: 1 } };
         }
-
+    
         const response = myRequestsQuery.data;
         let extractedData = [];
-        let extractedPagination = { total: 0, totalPages: 0 };
+        let extractedPagination = { total: 0, totalPages: 0, currentPage: 1 };
         
-        // Handle different response structures
+        // PERBAIKAN: Handle struktur response yang benar berdasarkan log Anda
         if (response.success && response.data) {
-            // Structure: { success: true, data: { requests: [...], pagination: {...} } }
-            extractedData = response.data.requests || response.data;
-            extractedPagination = response.data.pagination || response.pagination || {};
+            // Struktur: { success: true, data: { data: [...], pagination: {...} } }
+            if (response.data.data && Array.isArray(response.data.data)) {
+                extractedData = response.data.data; // <- INI YANG DIPERBAIKI
+                extractedPagination = response.data.pagination || {};
+            } else if (Array.isArray(response.data.requests)) {
+                extractedData = response.data.requests;
+                extractedPagination = response.data.pagination || {};
+            } else if (Array.isArray(response.data)) {
+                extractedData = response.data;
+                extractedPagination = response.pagination || {};
+            }
         } else if (response.data && response.pagination) {
-            // Structure: { data: [...], pagination: {...} }
+            // Struktur: { data: [...], pagination: {...} }
             extractedData = response.data;
             extractedPagination = response.pagination;
         } else if (Array.isArray(response)) {
             // Direct array response
             extractedData = response;
-            extractedPagination = { total: response.length, totalPages: 1 };
-        } else if (Array.isArray(response.data)) {
-            // Structure: { data: [...] }
-            extractedData = response.data;
-            extractedPagination = response.pagination || { total: response.data.length, totalPages: 1 };
+            extractedPagination = { total: response.length, totalPages: 1, currentPage: 1 };
         }
-
-        // SAFETY CHECK: Ensure data is always an array
+    
+        console.log('Processed data:', { data: extractedData, pagination: extractedPagination });
+    
+        // Safety check
         if (!Array.isArray(extractedData)) {
             console.warn('Data is not an array:', extractedData);
             extractedData = [];
         }
-
-        console.log('Processed data:', { data: extractedData, pagination: extractedPagination }); // Debug log
-
+    
         return { 
             data: extractedData, 
-            pagination: extractedPagination 
+            pagination: { 
+                ...extractedPagination,
+                currentPage: extractedPagination.page || extractedPagination.currentPage || currentPage // <- PERBAIKAN: gunakan 'page' dari response
+            }
         };
-    }, [myRequestsQuery.data]);
+    }, [myRequestsQuery.data, currentPage]);
 
     // Status configuration untuk badge
     const getStatusBadge = useCallback((status) => {
@@ -535,6 +560,29 @@ const SuratPengantarList = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* TAMBAHAN: Error state */}
+                {myRequestsQuery.error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                        <div className="flex">
+                            <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                            <div>
+                                <h3 className="text-sm font-medium text-red-800">
+                                    Error memuat data
+                                </h3>
+                                <p className="text-sm text-red-600 mt-1">
+                                    {myRequestsQuery.error.message || 'Terjadi kesalahan saat memuat data'}
+                                </p>
+                                <button
+                                    onClick={handleRefresh}
+                                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                                >
+                                    Coba lagi
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Requests Table */}
                 {DataTable ? (

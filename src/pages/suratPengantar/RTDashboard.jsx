@@ -1,4 +1,4 @@
-// src/pages/suratPengantar/RTDashboard.jsx
+// src/pages/suratPengantar/RTDashboard.jsx - FIXED VERSION dengan proper error handling
 import { useState, useEffect } from 'react';
 import { 
     FileText, 
@@ -10,14 +10,26 @@ import {
     AlertTriangle,
     User,
     MessageSquare,
-    Eye
+    Eye,
+    ChevronLeft,
+    ChevronRight,
+    RefreshCw
 } from 'lucide-react';
-import { useSuratPengantar } from '../../hooks/useSuratPengantar';
+import { useQuery } from '@tanstack/react-query';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import api from '../../services/api';
 
+// ApprovalModal Component dengan proper error handling
 const ApprovalModal = ({ isOpen, onClose, request, onApprove, isProcessing }) => {
     const [action, setAction] = useState('');
     const [notes, setNotes] = useState('');
+
+    useEffect(() => {
+        if (!isOpen) {
+            setAction('');
+            setNotes('');
+        }
+    }, [isOpen]);
 
     if (!isOpen || !request) return null;
 
@@ -42,6 +54,7 @@ const ApprovalModal = ({ isOpen, onClose, request, onApprove, isProcessing }) =>
                         <button
                             onClick={onClose}
                             className="text-gray-400 hover:text-gray-600 transition-colors"
+                            disabled={isProcessing}
                         >
                             <XCircle className="h-6 w-6" />
                         </button>
@@ -51,20 +64,20 @@ const ApprovalModal = ({ isOpen, onClose, request, onApprove, isProcessing }) =>
                 <div className="p-6">
                     {/* Request Info */}
                     <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                        <h4 className="font-medium text-gray-900 mb-2">{request.category_name}</h4>
+                        <h4 className="font-medium text-gray-900 mb-2">{request.category_name || 'N/A'}</h4>
                         <div className="text-sm text-gray-600 space-y-1">
                             <div className="flex items-center">
                                 <User className="h-4 w-4 mr-2" />
-                                {request.full_name} - NIK: {request.nik?.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-****-****-$4')}
+                                {request.full_name || 'N/A'} - NIK: {request.nik?.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-****-****-$4') || 'N/A'}
                             </div>
                             <div className="flex items-center">
                                 <Calendar className="h-4 w-4 mr-2" />
-                                Diajukan: {new Date(request.submitted_at).toLocaleDateString('id-ID')}
+                                Diajukan: {request.submitted_at ? new Date(request.submitted_at).toLocaleDateString('id-ID') : 'N/A'}
                             </div>
                         </div>
                         <div className="mt-3">
                             <p className="text-sm font-medium text-gray-700 mb-1">Alasan:</p>
-                            <p className="text-sm text-gray-600">{request.reason}</p>
+                            <p className="text-sm text-gray-600">{request.reason || 'Tidak ada alasan'}</p>
                         </div>
                     </div>
 
@@ -83,6 +96,7 @@ const ApprovalModal = ({ isOpen, onClose, request, onApprove, isProcessing }) =>
                                         checked={action === 'A'}
                                         onChange={(e) => setAction(e.target.value)}
                                         className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
+                                        disabled={isProcessing}
                                     />
                                     <div className="ml-3">
                                         <div className="flex items-center">
@@ -101,6 +115,7 @@ const ApprovalModal = ({ isOpen, onClose, request, onApprove, isProcessing }) =>
                                         checked={action === 'R'}
                                         onChange={(e) => setAction(e.target.value)}
                                         className="h-4 w-4 text-red-600 border-gray-300 focus:ring-red-500"
+                                        disabled={isProcessing}
                                     />
                                     <div className="ml-3">
                                         <div className="flex items-center">
@@ -125,6 +140,7 @@ const ApprovalModal = ({ isOpen, onClose, request, onApprove, isProcessing }) =>
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder={action === 'A' ? "Catatan persetujuan (opsional)" : "Jelaskan alasan penolakan"}
                                 required={action === 'R'}
+                                disabled={isProcessing}
                             />
                             <p className="mt-1 text-xs text-gray-500">
                                 {action === 'A' ? 'Tambahkan catatan jika diperlukan' : 'Wajib diisi untuk penolakan'}
@@ -171,73 +187,212 @@ const RTDashboard = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [showApprovalModal, setShowApprovalModal] = useState(false);
-    
-    const { 
-        pendingRTRequests, 
-        pendingRTLoading, 
-        fetchPendingRT, 
-        rtApproval, 
-        isRTProcessing,
-        statistics,
-        statisticsLoading,
-        fetchStatistics
-    } = useSuratPengantar();
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    useEffect(() => {
-        fetchPendingRT({ page: currentPage, limit: 10 });
-        fetchStatistics({ period: 'month' });
-    }, [currentPage, fetchPendingRT, fetchStatistics]);
+    // Fetch pending RT requests dengan proper error handling
+    const { 
+        data: pendingData, 
+        isLoading: pendingLoading, 
+        error: pendingError,
+        refetch: refetchPending 
+    } = useQuery({
+        queryKey: ['pending-rt-requests', currentPage],
+        queryFn: async () => {
+            console.log('🔄 Fetching pending RT requests...');
+            try {
+                const response = await api.get('/api/surat-pengantar/rt/pending', {
+                    params: {
+                        page: currentPage,
+                        limit: 10
+                    }
+                });
+                console.log('📊 Pending RT requests response:', response.data);
+                return response.data;
+            } catch (error) {
+                console.error('❌ Error fetching pending RT requests:', error);
+                throw error;
+            }
+        },
+        retry: 2,
+        staleTime: 30 * 1000, // 30 seconds
+        onError: (error) => {
+            console.error('❌ Query error:', error);
+        }
+    });
+
+    // Fetch statistics dengan error handling
+    const { 
+        data: statisticsData, 
+        isLoading: statisticsLoading,
+        error: statisticsError,
+        refetch: refetchStatistics 
+    } = useQuery({
+        queryKey: ['rt-statistics'],
+        queryFn: async () => {
+            console.log('🔄 Fetching RT statistics...');
+            try {
+                const response = await api.get('/api/surat-pengantar/rt/statistics', {
+                    params: { period: 'month' }
+                });
+                console.log('📊 RT statistics response:', response.data);
+                return response.data;
+            } catch (error) {
+                console.error('❌ Error fetching RT statistics:', error);
+                throw error;
+            }
+        },
+        retry: 2,
+        staleTime: 2 * 60 * 1000, // 2 minutes
+    });
+
+    // Safe data extraction dengan fallbacks
+    const pendingRequests = (() => {
+        try {
+            if (!pendingData) return { data: [], pagination: { total: 0, totalPages: 1, currentPage: 1 } };
+            
+            if (pendingData.success && pendingData.data) {
+                return {
+                    data: pendingData.data.requests || pendingData.data || [],
+                    pagination: pendingData.data.pagination || pendingData.pagination || { total: 0, totalPages: 1, currentPage: 1 }
+                };
+            }
+            
+            return {
+                data: pendingData.data || pendingData.requests || [],
+                pagination: pendingData.pagination || { total: 0, totalPages: 1, currentPage: 1 }
+            };
+        } catch (error) {
+            console.error('❌ Error processing pending data:', error);
+            return { data: [], pagination: { total: 0, totalPages: 1, currentPage: 1 } };
+        }
+    })();
+
+    const statistics = (() => {
+        try {
+            if (!statisticsData) return {};
+            
+            if (statisticsData.success && statisticsData.data) {
+                return statisticsData.data;
+            }
+            
+            return statisticsData;
+        } catch (error) {
+            console.error('❌ Error processing statistics data:', error);
+            return {};
+        }
+    })();
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric'
-        });
+        try {
+            return new Date(dateString).toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '-';
+        }
     };
 
     const handleApproval = (request) => {
+        if (!request) {
+            console.error('❌ No request provided for approval');
+            return;
+        }
         setSelectedRequest(request);
         setShowApprovalModal(true);
     };
 
-    const handleApprovalSubmit = ({ id, data }) => {
-        rtApproval({ id, data });
-        setShowApprovalModal(false);
-        setSelectedRequest(null);
+    const handleApprovalSubmit = async ({ id, data }) => {
+        if (!id || !data) {
+            console.error('❌ Invalid approval data:', { id, data });
+            return;
+        }
+
+        try {
+            setIsProcessing(true);
+            console.log('🔄 Submitting RT approval:', { id, data });
+
+            const response = await api.patch(`/api/surat-pengantar/${id}/rt-approval`, data);
+            console.log('✅ RT approval success:', response.data);
+
+            // Refresh data
+            refetchPending();
+            refetchStatistics();
+
+            // Close modal
+            setShowApprovalModal(false);
+            setSelectedRequest(null);
+
+            // Show success message
+            const action = data.action === 'A' ? 'disetujui' : 'ditolak';
+            // You can add toast notification here if needed
+            
+        } catch (error) {
+            console.error('❌ RT approval error:', error);
+            // You can add error toast notification here if needed
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const handleCloseModal = () => {
+        if (isProcessing) return; // Prevent closing while processing
         setShowApprovalModal(false);
         setSelectedRequest(null);
     };
 
     const getUrgencyBadge = (submittedAt) => {
-        const daysSince = Math.floor((new Date() - new Date(submittedAt)) / (1000 * 60 * 60 * 24));
-        
-        if (daysSince >= 3) {
+        if (!submittedAt) {
             return (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                    <AlertTriangle className="h-3 w-3 mr-1" />
-                    Mendesak ({daysSince} hari)
-                </span>
-            );
-        } else if (daysSince >= 1) {
-            return (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                     <Clock className="h-3 w-3 mr-1" />
-                    {daysSince} hari
+                    N/A
                 </span>
             );
         }
-        
-        return (
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                <Clock className="h-3 w-3 mr-1" />
-                Baru
-            </span>
-        );
+
+        try {
+            const daysSince = Math.floor((new Date() - new Date(submittedAt)) / (1000 * 60 * 60 * 24));
+            
+            if (daysSince >= 3) {
+                return (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Mendesak ({daysSince} hari)
+                    </span>
+                );
+            } else if (daysSince >= 1) {
+                return (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {daysSince} hari
+                    </span>
+                );
+            }
+            
+            return (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Baru
+                </span>
+            );
+        } catch (error) {
+            console.error('Error calculating urgency:', error);
+            return (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    N/A
+                </span>
+            );
+        }
+    };
+
+    const handleRefresh = () => {
+        refetchPending();
+        refetchStatistics();
     };
 
     return (
@@ -265,44 +420,74 @@ const RTDashboard = () => {
 
                     {/* Stats */}
                     <div className="p-6">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {[
-                                { 
-                                    label: 'Menunggu Persetujuan', 
-                                    value: pendingRTRequests.pagination?.total || 0, 
-                                    color: 'text-orange-600',
-                                    icon: Clock
-                                },
-                                { 
-                                    label: 'Total Bulan Ini', 
-                                    value: statistics.total || 0, 
-                                    color: 'text-blue-600',
-                                    icon: FileText
-                                },
-                                { 
-                                    label: 'Disetujui', 
-                                    value: statistics.byStatus?.RT_APPROVED || 0, 
-                                    color: 'text-green-600',
-                                    icon: CheckCircle
-                                },
-                                { 
-                                    label: 'Ditolak', 
-                                    value: statistics.byStatus?.REJECTED || 0, 
-                                    color: 'text-red-600',
-                                    icon: XCircle
-                                }
-                            ].map((stat, index) => (
-                                <div key={index} className="text-center p-4 bg-gray-50 rounded-lg">
-                                    <div className="flex items-center justify-center mb-2">
-                                        <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                                    </div>
-                                    <div className={`text-2xl font-bold ${stat.color}`}>
-                                        {stat.value}
-                                    </div>
-                                    <div className="text-sm text-gray-500">{stat.label}</div>
-                                </div>
-                            ))}
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Ringkasan</h3>
+                            <button
+                                onClick={handleRefresh}
+                                disabled={pendingLoading || statisticsLoading}
+                                className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors duration-200"
+                            >
+                                <RefreshCw className={`h-4 w-4 mr-1 ${(pendingLoading || statisticsLoading) ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </button>
                         </div>
+
+                        {statisticsLoading ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {[...Array(4)].map((_, i) => (
+                                    <div key={i} className="animate-pulse">
+                                        <div className="bg-gray-200 rounded-lg p-4 h-20"></div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {[
+                                    { 
+                                        label: 'Menunggu Persetujuan', 
+                                        value: pendingRequests.pagination?.total || 0, 
+                                        color: 'text-orange-600',
+                                        icon: Clock
+                                    },
+                                    { 
+                                        label: 'Total Bulan Ini', 
+                                        value: statistics.total || 0, 
+                                        color: 'text-blue-600',
+                                        icon: FileText
+                                    },
+                                    { 
+                                        label: 'Disetujui', 
+                                        value: statistics.byStatus?.RT_APPROVED || 0, 
+                                        color: 'text-green-600',
+                                        icon: CheckCircle
+                                    },
+                                    { 
+                                        label: 'Ditolak', 
+                                        value: statistics.byStatus?.REJECTED || 0, 
+                                        color: 'text-red-600',
+                                        icon: XCircle
+                                    }
+                                ].map((stat, index) => (
+                                    <div key={index} className="text-center p-4 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center justify-center mb-2">
+                                            <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                                        </div>
+                                        <div className={`text-2xl font-bold ${stat.color}`}>
+                                            {stat.value}
+                                        </div>
+                                        <div className="text-sm text-gray-500">{stat.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {statisticsError && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+                                <p className="text-red-800 text-sm">
+                                    Gagal memuat statistik: {statisticsError.message || 'Unknown error'}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -317,11 +502,25 @@ const RTDashboard = () => {
                         </p>
                     </div>
 
-                    {pendingRTLoading ? (
+                    {pendingError && (
+                        <div className="p-6 bg-red-50 border-b border-red-200">
+                            <p className="text-red-800 text-sm">
+                                Error: {pendingError.message || 'Gagal memuat data'}
+                            </p>
+                            <button
+                                onClick={handleRefresh}
+                                className="mt-2 text-red-600 hover:text-red-800 text-sm underline"
+                            >
+                                Coba lagi
+                            </button>
+                        </div>
+                    )}
+
+                    {pendingLoading ? (
                         <div className="p-8">
                             <LoadingSpinner text="Memuat pengajuan..." />
                         </div>
-                    ) : pendingRTRequests.data?.length === 0 ? (
+                    ) : pendingRequests.data?.length === 0 ? (
                         <div className="text-center py-12">
                             <CheckCircle className="mx-auto h-12 w-12 text-green-400 mb-4" />
                             <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -354,7 +553,7 @@ const RTDashboard = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {pendingRTRequests.data?.map((request) => (
+                                    {pendingRequests.data?.map((request) => (
                                         <tr key={request.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center">
@@ -363,10 +562,10 @@ const RTDashboard = () => {
                                                     </div>
                                                     <div>
                                                         <div className="text-sm font-medium text-gray-900">
-                                                            {request.category_name}
+                                                            {request.category_name || 'N/A'}
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            ID: {request.id.substring(0, 8)}...
+                                                            ID: {request.id ? request.id.substring(0, 8) + '...' : 'N/A'}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -376,10 +575,10 @@ const RTDashboard = () => {
                                                     <User className="h-4 w-4 text-gray-400 mr-2" />
                                                     <div>
                                                         <div className="text-sm font-medium text-gray-900">
-                                                            {request.full_name}
+                                                            {request.full_name || 'N/A'}
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            {request.address}
+                                                            {request.address || 'N/A'}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -412,7 +611,7 @@ const RTDashboard = () => {
                     )}
 
                     {/* Pagination */}
-                    {pendingRTRequests.pagination && pendingRTRequests.pagination.totalPages > 1 && (
+                    {pendingRequests.pagination && pendingRequests.pagination.totalPages > 1 && (
                         <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
                             <div className="flex items-center justify-between">
                                 <div className="flex-1 flex justify-between sm:hidden">
@@ -424,8 +623,8 @@ const RTDashboard = () => {
                                         Sebelumnya
                                     </button>
                                     <button
-                                        onClick={() => setCurrentPage(Math.min(pendingRTRequests.pagination.totalPages, currentPage + 1))}
-                                        disabled={currentPage === pendingRTRequests.pagination.totalPages}
+                                        onClick={() => setCurrentPage(Math.min(pendingRequests.pagination.totalPages, currentPage + 1))}
+                                        disabled={currentPage === pendingRequests.pagination.totalPages}
                                         className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Selanjutnya
@@ -440,10 +639,10 @@ const RTDashboard = () => {
                                             </span>{' '}
                                             sampai{' '}
                                             <span className="font-medium">
-                                                {Math.min(currentPage * 10, pendingRTRequests.pagination.total)}
+                                                {Math.min(currentPage * 10, pendingRequests.pagination.total)}
                                             </span>{' '}
                                             dari{' '}
-                                            <span className="font-medium">{pendingRTRequests.pagination.total}</span>{' '}
+                                            <span className="font-medium">{pendingRequests.pagination.total}</span>{' '}
                                             hasil
                                         </p>
                                     </div>
@@ -455,12 +654,10 @@ const RTDashboard = () => {
                                                 className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 <span className="sr-only">Sebelumnya</span>
-                                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                </svg>
+                                                <ChevronLeft className="h-5 w-5" />
                                             </button>
                                             
-                                            {Array.from({ length: Math.min(5, pendingRTRequests.pagination.totalPages) }, (_, i) => {
+                                            {Array.from({ length: Math.min(5, pendingRequests.pagination.totalPages) }, (_, i) => {
                                                 const pageNum = i + 1;
                                                 return (
                                                     <button
@@ -478,14 +675,12 @@ const RTDashboard = () => {
                                             })}
 
                                             <button
-                                                onClick={() => setCurrentPage(Math.min(pendingRTRequests.pagination.totalPages, currentPage + 1))}
-                                                disabled={currentPage === pendingRTRequests.pagination.totalPages}
+                                                onClick={() => setCurrentPage(Math.min(pendingRequests.pagination.totalPages, currentPage + 1))}
+                                                disabled={currentPage === pendingRequests.pagination.totalPages}
                                                 className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 <span className="sr-only">Selanjutnya</span>
-                                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                </svg>
+                                                <ChevronRight className="h-5 w-5" />
                                             </button>
                                         </nav>
                                     </div>
@@ -501,7 +696,7 @@ const RTDashboard = () => {
                     onClose={handleCloseModal}
                     request={selectedRequest}
                     onApprove={handleApprovalSubmit}
-                    isProcessing={isRTProcessing}
+                    isProcessing={isProcessing}
                 />
             </div>
         </div>

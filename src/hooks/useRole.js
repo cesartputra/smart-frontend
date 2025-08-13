@@ -1,4 +1,4 @@
-// src/hooks/useRole.js
+// src/hooks/useRole.js - FIXED VERSION
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
@@ -79,6 +79,9 @@ export const useRole = () => {
         staleTime: 5 * 60 * 1000, // 5 minutes
         onError: (error) => {
             console.error('❌ My roles query error:', error);
+        },
+        onSuccess: (data) => {
+            console.log('✅ My roles query success:', data);
         }
     });
 
@@ -125,22 +128,80 @@ export const useRole = () => {
         },
     });
 
-    // Helper functions
+    // FIXED: Extract roles array dengan error handling yang lebih baik
+    const myRoles = (() => {
+        try {
+            if (!myRolesQuery.data) return [];
+            
+            // Handle different response structures
+            if (myRolesQuery.data.success && myRolesQuery.data.data) {
+                // Structure: { success: true, data: { roles: [...] } }
+                return myRolesQuery.data.data.roles || myRolesQuery.data.data || [];
+            } else if (myRolesQuery.data.roles) {
+                // Structure: { roles: [...] }
+                return myRolesQuery.data.roles;
+            } else if (Array.isArray(myRolesQuery.data)) {
+                // Direct array: [...]
+                return myRolesQuery.data;
+            }
+            
+            console.warn('⚠️ Unexpected roles response structure:', myRolesQuery.data);
+            return [];
+        } catch (error) {
+            console.error('❌ Error parsing myRoles:', error);
+            return [];
+        }
+    })();
+
+    // FIXED: Helper functions dengan logging yang lebih detail
     const hasRole = (roleName) => {
-        const roles = myRolesQuery.data?.roles || [];
-        return roles.some(role => role.role_name === roleName);
+        console.log(`🔍 Checking hasRole("${roleName}")`);
+        console.log('📊 Available roles:', myRoles?.map(r => r.role_name));
+        
+        if (!Array.isArray(myRoles)) {
+            console.warn('⚠️ myRoles is not an array:', myRoles);
+            return false;
+        }
+        
+        const hasRoleResult = myRoles.some(role => {
+            const roleNameMatch = role.role_name === roleName;
+            console.log(`  - Checking role "${role.role_name}" vs "${roleName}": ${roleNameMatch}`);
+            return roleNameMatch;
+        });
+        
+        console.log(`✅ hasRole("${roleName}") result:`, hasRoleResult);
+        return hasRoleResult;
     };
 
     const hasAnyRole = (roleNames) => {
-        const roles = myRolesQuery.data?.roles || [];
-        return roleNames.some(roleName => 
-            roles.some(role => role.role_name === roleName)
+        console.log(`🔍 Checking hasAnyRole(${JSON.stringify(roleNames)})`);
+        
+        if (!Array.isArray(myRoles)) {
+            console.warn('⚠️ myRoles is not an array:', myRoles);
+            return false;
+        }
+        
+        const result = roleNames.some(roleName => 
+            myRoles.some(role => {
+                const match = role.role_name === roleName;
+                console.log(`  - Checking "${role.role_name}" === "${roleName}": ${match}`);
+                return match;
+            })
         );
+        
+        console.log(`✅ hasAnyRole result:`, result);
+        return result;
     };
 
     const getRoleInLocation = (roleName, locationType = null) => {
-        const roles = myRolesQuery.data?.roles || [];
-        return roles.find(role => {
+        console.log(`🔍 Getting role "${roleName}" in location type "${locationType}"`);
+        
+        if (!Array.isArray(myRoles)) {
+            console.warn('⚠️ myRoles is not an array:', myRoles);
+            return null;
+        }
+        
+        const foundRole = myRoles.find(role => {
             if (role.role_name !== roleName) return false;
             
             // If no location type specified, return any match
@@ -152,12 +213,35 @@ export const useRole = () => {
             
             return false;
         });
+        
+        console.log(`✅ getRoleInLocation result:`, foundRole);
+        return foundRole || null;
     };
 
-    const isRT = () => hasRole('KETUA RT');
-    const isRW = () => hasRole('KETUA RW');
-    const isAdmin = () => hasAnyRole(['ADMIN', 'SUPER ADMIN']);
-    const isSuperAdmin = () => hasRole('SUPER ADMIN');
+    // FIXED: Simple boolean functions dengan explicit logging
+    const isRT = () => {
+        const result = hasRole('KETUA RT');
+        console.log(`🏠 isRT() result: ${result}`);
+        return result;
+    };
+
+    const isRW = () => {
+        const result = hasRole('KETUA RW');
+        console.log(`🏛️ isRW() result: ${result}`);
+        return result;
+    };
+
+    const isAdmin = () => {
+        const result = hasAnyRole(['ADMIN', 'SUPER ADMIN']);
+        console.log(`👑 isAdmin() result: ${result}`);
+        return result;
+    };
+
+    const isSuperAdmin = () => {
+        const result = hasRole('SUPER ADMIN');
+        console.log(`🦸 isSuperAdmin() result: ${result}`);
+        return result;
+    };
 
     const fetchLocationRoles = (type, locationId) => {
         locationRolesQuery.refetch({
@@ -165,9 +249,98 @@ export const useRole = () => {
         });
     };
 
+    // FIXED: getUserLocation dengan error handling yang lebih baik
+    const getUserLocation = () => {
+        console.log('📍 Getting user location...');
+        
+        if (!Array.isArray(myRoles) || myRoles.length === 0) {
+            console.log('📍 No roles found for location');
+            return null;
+        }
+        
+        // Try to find RT location first
+        const rtRole = myRoles.find(role => role.rt_id);
+        if (rtRole) {
+            const location = {
+                type: 'RT',
+                id: rtRole.rt_id,
+                name: rtRole.rt_no,
+                rw_id: rtRole.rw_id,
+                rw_name: rtRole.rw_no
+            };
+            console.log('📍 Found RT location:', location);
+            return location;
+        }
+        
+        // Try to find RW location
+        const rwRole = myRoles.find(role => role.rw_id);
+        if (rwRole) {
+            const location = {
+                type: 'RW',
+                id: rwRole.rw_id,
+                name: rwRole.rw_no
+            };
+            console.log('📍 Found RW location:', location);
+            return location;
+        }
+        
+        console.log('📍 No location found');
+        return null;
+    };
+
+    // Get role permissions
+    const getPermissions = () => {
+        if (!Array.isArray(myRoles)) return [];
+        
+        const permissions = new Set();
+        
+        myRoles.forEach(role => {
+            switch (role.role_name) {
+                case 'SUPER ADMIN':
+                    permissions.add('manage_all');
+                    permissions.add('manage_users');
+                    permissions.add('manage_roles');
+                    permissions.add('view_reports');
+                    permissions.add('manage_surat_pengantar');
+                    break;
+                case 'ADMIN':
+                    permissions.add('manage_users');
+                    permissions.add('view_reports');
+                    permissions.add('manage_surat_pengantar');
+                    break;
+                case 'KETUA RW':
+                    permissions.add('approve_rw');
+                    permissions.add('view_rw_reports');
+                    permissions.add('manage_rt');
+                    break;
+                case 'KETUA RT':
+                    permissions.add('approve_rt');
+                    permissions.add('view_rt_reports');
+                    break;
+                case 'WARGA':
+                    permissions.add('create_surat_pengantar');
+                    permissions.add('view_own_data');
+                    break;
+                default:
+                    break;
+            }
+        });
+        
+        return Array.from(permissions);
+    };
+
+    console.log('🎯 useRole hook returning:', {
+        myRoles,
+        myRolesLoading: myRolesQuery.isLoading,
+        isRT: isRT(),
+        isRW: isRW(),
+        isAdmin: isAdmin(),
+        location: getUserLocation()
+    });
+
     return {
         // Data
-        myRoles: myRolesQuery.data?.roles || [],
+        myRoles,
         locationRoles: locationRolesQuery.data?.roles || [],
         
         // Loading states
@@ -205,72 +378,9 @@ export const useRole = () => {
         canManageUsers: () => isAdmin(),
         
         // Get user's location info
-        getUserLocation: () => {
-            const roles = myRolesQuery.data?.roles || [];
-            
-            // Try to find RT location first
-            const rtRole = roles.find(role => role.rt_id);
-            if (rtRole) {
-                return {
-                    type: 'RT',
-                    id: rtRole.rt_id,
-                    name: rtRole.rt_no,
-                    rw_id: rtRole.rw_id,
-                    rw_name: rtRole.rw_no
-                };
-            }
-            
-            // Try to find RW location
-            const rwRole = roles.find(role => role.rw_id);
-            if (rwRole) {
-                return {
-                    type: 'RW',
-                    id: rwRole.rw_id,
-                    name: rwRole.rw_no
-                };
-            }
-            
-            return null;
-        },
+        getUserLocation,
         
         // Get role permissions
-        getPermissions: () => {
-            const roles = myRolesQuery.data?.roles || [];
-            const permissions = new Set();
-            
-            roles.forEach(role => {
-                switch (role.role_name) {
-                    case 'SUPER ADMIN':
-                        permissions.add('manage_all');
-                        permissions.add('manage_users');
-                        permissions.add('manage_roles');
-                        permissions.add('view_reports');
-                        permissions.add('manage_surat_pengantar');
-                        break;
-                    case 'ADMIN':
-                        permissions.add('manage_users');
-                        permissions.add('view_reports');
-                        permissions.add('manage_surat_pengantar');
-                        break;
-                    case 'KETUA RW':
-                        permissions.add('approve_rw');
-                        permissions.add('view_rw_reports');
-                        permissions.add('manage_rt');
-                        break;
-                    case 'KETUA RT':
-                        permissions.add('approve_rt');
-                        permissions.add('view_rt_reports');
-                        break;
-                    case 'WARGA':
-                        permissions.add('create_surat_pengantar');
-                        permissions.add('view_own_data');
-                        break;
-                    default:
-                        break;
-                }
-            });
-            
-            return Array.from(permissions);
-        }
+        getPermissions
     };
 };

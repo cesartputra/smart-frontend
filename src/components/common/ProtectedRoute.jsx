@@ -1,4 +1,4 @@
-// src/components/common/ProtectedRoute.jsx - Better completion checking
+// src/components/common/ProtectedRoute.jsx - Enhanced dengan debugging
 import { Navigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 
@@ -8,7 +8,12 @@ const ProtectedRoute = ({ children, requiresKTP = false, requiresUserDetails = f
 
     console.log('🛡️ ProtectedRoute check:', {
         isAuthenticated,
-        user: user ? { ...user, hasCompletedKTP: user.hasCompletedKTP, hasCompletedUserDetails: user.hasCompletedUserDetails } : null,
+        user: user ? { 
+            id: user.id,
+            email: user.email,
+            hasCompletedKTP: user.hasCompletedKTP, 
+            hasCompletedUserDetails: user.hasCompletedUserDetails 
+        } : null,
         requiresKTP,
         requiresUserDetails,
         currentPath: location.pathname
@@ -41,15 +46,50 @@ const ProtectedRoute = ({ children, requiresKTP = false, requiresUserDetails = f
         return <Navigate to="/complete-profile" replace />;
     }
 
-    // Auto-redirect to next step if accessing a completed step
-    if (!requiresKTP && !requiresUserDetails) {
+    // Auto-redirect to next step if accessing a completed step (only for root path)
+    if (!requiresKTP && !requiresUserDetails && location.pathname === '/') {
         const nextStep = getNextRequiredStep();
-        if (nextStep !== '/dashboard' && location.pathname !== nextStep) {
-        console.log('🔄 Auto-redirecting to next required step:', nextStep);
-        return <Navigate to={nextStep} replace />;
+        if (nextStep !== '/dashboard') {
+            console.log('🔄 Auto-redirecting from root to next required step:', nextStep);
+            return <Navigate to={nextStep} replace />;
         }
     }
 
+    // Special handling untuk dashboard dan routes lainnya
+    const allowedPaths = [
+        '/dashboard',
+        '/surat-pengantar',
+        '/rt/surat-pengantar',
+        '/rw/surat-pengantar',
+        '/admin/',
+        '/profile',
+        '/settings'
+    ];
+
+    const isAllowedPath = allowedPaths.some(path => 
+        location.pathname === path || location.pathname.startsWith(path)
+    );
+
+    if (!isAllowedPath && location.pathname !== '/') {
+        console.log('⚠️ Unknown path, checking completion status for:', location.pathname);
+        
+        // Jika semua requirement terpenuhi, lanjutkan
+        if (completionStatus.isEmailVerified && 
+            completionStatus.hasCompletedKTP && 
+            completionStatus.hasCompletedUserDetails) {
+            console.log('✅ All requirements met, allowing access to:', location.pathname);
+            return children;
+        }
+        
+        // Jika belum, redirect ke next step
+        const nextStep = getNextRequiredStep();
+        if (nextStep !== location.pathname) {
+            console.log('🔄 Redirecting to next required step:', nextStep);
+            return <Navigate to={nextStep} replace />;
+        }
+    }
+
+    console.log('✅ ProtectedRoute: All checks passed for:', location.pathname);
     return children;
 };
 
