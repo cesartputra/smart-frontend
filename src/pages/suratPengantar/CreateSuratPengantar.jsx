@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useSuratPengantar } from '../../hooks/useSuratPengantar';
 import { useKtp } from '../../hooks/useKtp';
+import { useKartuKeluarga } from '../../hooks/useKartuKeluarga';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { toast } from 'react-hot-toast';
 
@@ -44,6 +45,7 @@ const CreateSuratPengantar = () => {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [familyMembers, setFamilyMembers] = useState([]);
     const [reasonLength, setReasonLength] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
     
     const { 
         categories, 
@@ -53,6 +55,13 @@ const CreateSuratPengantar = () => {
         createRequest, 
         isCreating 
     } = useSuratPengantar();
+
+    const { 
+        myFamily, 
+        isLoading: familyLoading, 
+        error: familyError, 
+        getMyFamily 
+    } = useKartuKeluarga();
 
     const {
         register,
@@ -101,46 +110,67 @@ const CreateSuratPengantar = () => {
     useEffect(() => {
         const fetchFamilyMembers = async () => {
             try {
-                // TODO: Replace with actual KTP service call
-                // const familyData = await ktpService.getFamilyMembers();
+                await getMyFamily();
                 
-                // Simulated data - replace with actual API call
-                const members = [
-                    {
-                        id: 'current-user',
-                        full_name: 'Anda Sendiri',
-                        nik: '1234567890123456',
-                        is_current_user: true,
-                        relationship: 'Kepala Keluarga'
-                    },
-                    // Add more family members from KTP data
-                ];
-                
-                setFamilyMembers(members);
-                
-                // Auto-select current user
-                if (members.length > 0) {
-                    setValue('user_ktp_id', members[0].id);
+                if (myFamily && myFamily.length > 0) {
+                    // Format members data for the form
+                    const formattedMembers = myFamily.map(member => ({
+                        ...kartuKeluargaService.formatMemberData(member),
+                        id: member.id,
+                        full_name: member.name || member.full_name,
+                        is_current_user: member.is_kepala_keluarga || member.hubungan_keluarga === 'KEPALA_KELUARGA'
+                    }));
+                    
+                    const sortedMembers = kartuKeluargaService.sortMembersByHierarchy(formattedMembers);
+                    setFamilyMembers(sortedMembers);
+                    
+                    // Auto-select current user or first family member
+                    const selectedMember = sortedMembers.find(member => member.is_current_user) || sortedMembers[0];
+                    setValue('user_ktp_id', selectedMember.id);
+                } else {
+                    handleEmptyFamilyData();
                 }
             } catch (error) {
-                console.error('Error fetching family members:', error);
-                toast.error('Gagal memuat data anggota keluarga');
-                
-                // Fallback to current user only
-                const fallbackMembers = [{
-                    id: 'current-user',
-                    full_name: 'Anda Sendiri',
-                    nik: '1234567890123456',
-                    is_current_user: true
-                }];
-                
-                setFamilyMembers(fallbackMembers);
-                setValue('user_ktp_id', fallbackMembers[0].id);
+                handleFetchError(error);
             }
         };
-
+    
+        const handleEmptyFamilyData = () => {
+            toast.warning('Data anggota keluarga tidak ditemukan');
+            setFamilyMembers([]);
+        };
+    
+        const handleFetchError = (error) => {
+            console.error('Error fetching family members:', error);
+            
+            const errorMessage = error.message || 'Gagal memuat data anggota keluarga';
+            const errorMap = {
+                'complete your KTP': 'Silakan lengkapi data KTP Anda terlebih dahulu',
+                'complete your user details': 'Silakan lengkapi profil Anda terlebih dahulu',
+                'verify your email': 'Silakan verifikasi email Anda terlebih dahulu'
+            };
+            
+            const specificError = Object.keys(errorMap).find(key => errorMessage.includes(key));
+            toast.error(specificError ? errorMap[specificError] : errorMessage);
+            
+            setFamilyMembers([]);
+        };
+    
         fetchFamilyMembers();
-    }, [setValue]);
+    }, [setValue, getMyFamily, myFamily]);
+
+    // Update loading state based on hook
+    useEffect(() => {
+        setIsLoading(familyLoading);
+    }, [familyLoading]);
+
+    // Handle hook errors
+    useEffect(() => {
+        if (familyError) {
+            console.error('Family hook error:', familyError);
+            toast.error(familyError);
+        }
+    }, [familyError]);
 
     const onSubmit = async (data) => {
         console.log('Creating surat pengantar:', data);

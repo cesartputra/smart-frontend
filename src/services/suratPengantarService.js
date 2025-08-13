@@ -1,36 +1,36 @@
-// src/services/SuratPengantarService.js - REFACTORED VERSION
+// src/services/suratPengantarService.js - REFACTORED VERSION
 import api from './api';
 
 const suratPengantarService = {
     // Get categories
     getCategories: async () => {
-        console.log('SuratPengantarService.getCategories called');
+        console.log('suratPengantarService.getCategories called');
         try {
             const response = await api.get('/api/surat-pengantar/categories');
             console.log('GetCategories response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getCategories error:', error);
+            console.error('suratPengantarService.getCategories error:', error);
             throw error;
         }
     },
 
     // Create surat pengantar request
     createRequest: async (data) => {
-        console.log('SuratPengantarService.createRequest called with:', data);
+        console.log('suratPengantarService.createRequest called with:', data);
         try {
             const response = await api.post('/api/surat-pengantar', data);
             console.log('CreateRequest response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.createRequest error:', error);
+            console.error('suratPengantarService.createRequest error:', error);
             throw error;
         }
     },
 
     // Get my requests - REFACTORED dengan proper validation
     getMyRequests: async (params = {}) => {
-        console.log('SuratPengantarService.getMyRequests called with:', params);
+        console.log('suratPengantarService.getMyRequests called with:', params);
         
         // Validate parameters sesuai dengan backend validation
         const validatedParams = {};
@@ -89,7 +89,7 @@ const suratPengantarService = {
             console.log('GetMyRequests response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getMyRequests error:', error);
+            console.error('suratPengantarService.getMyRequests error:', error);
             
             // Handle specific validation errors from backend
             if (error.response?.status === 400) {
@@ -103,7 +103,7 @@ const suratPengantarService = {
 
     // Get surat pengantar detail
     getDetail: async (id) => {
-        console.log('SuratPengantarService.getDetail called with id:', id);
+        console.log('suratPengantarService.getDetail called with id:', id);
         
         if (!id || typeof id !== 'string') {
             throw new Error('Invalid ID parameter');
@@ -114,7 +114,7 @@ const suratPengantarService = {
             console.log('GetDetail response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getDetail error:', error);
+            console.error('suratPengantarService.getDetail error:', error);
             
             if (error.response?.status === 404) {
                 throw new Error('Surat pengantar tidak ditemukan');
@@ -126,7 +126,7 @@ const suratPengantarService = {
 
     // Download PDF
     downloadPDF: async (id) => {
-        console.log('SuratPengantarService.downloadPDF called with id:', id);
+        console.log('suratPengantarService.downloadPDF called with id:', id);
         
         if (!id || typeof id !== 'string') {
             throw new Error('Invalid ID parameter');
@@ -139,7 +139,7 @@ const suratPengantarService = {
             console.log('DownloadPDF response received');
             return response;
         } catch (error) {
-            console.error('SuratPengantarService.downloadPDF error:', error);
+            console.error('suratPengantarService.downloadPDF error:', error);
             
             if (error.response?.status === 404) {
                 throw new Error('File PDF tidak ditemukan');
@@ -155,7 +155,7 @@ const suratPengantarService = {
 
     // RT Management
     getPendingForRT: async (params = {}) => {
-        console.log('SuratPengantarService.getPendingForRT called with:', params);
+        console.log('suratPengantarService.getPendingForRT called with:', params);
         
         const validatedParams = {};
         
@@ -182,13 +182,13 @@ const suratPengantarService = {
             console.log('GetPendingForRT response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getPendingForRT error:', error);
+            console.error('suratPengantarService.getPendingForRT error:', error);
             throw error;
         }
     },
 
     rtApproval: async (id, data) => {
-        console.log('SuratPengantarService.rtApproval called with:', { id, data });
+        console.log('suratPengantarService.rtApproval called with:', { id, data });
         
         if (!id || typeof id !== 'string') {
             throw new Error('Invalid ID parameter');
@@ -207,13 +207,13 @@ const suratPengantarService = {
             console.log('RTApproval response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.rtApproval error:', error);
+            console.error('suratPengantarService.rtApproval error:', error);
             throw error;
         }
     },
 
     getRTStatistics: async (params = {}) => {
-        console.log('SuratPengantarService.getRTStatistics called with:', params);
+        console.log('suratPengantarService.getRTStatistics called with:', params);
         
         const validatedParams = {};
         
@@ -236,14 +236,14 @@ const suratPengantarService = {
             console.log('GetRTStatistics response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getRTStatistics error:', error);
+            console.error('suratPengantarService.getRTStatistics error:', error);
             throw error;
         }
     },
 
     // RW Management
     getPendingForRW: async (params = {}) => {
-        console.log('SuratPengantarService.getPendingForRW called with:', params);
+        console.log('suratPengantarService.getPendingForRW called with:', params);
         
         const validatedParams = {};
         
@@ -270,13 +270,13 @@ const suratPengantarService = {
             console.log('GetPendingForRW response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getPendingForRW error:', error);
+            console.error('suratPengantarService.getPendingForRW error:', error);
             throw error;
         }
     },
 
     rwApproval: async (id, data) => {
-        console.log('SuratPengantarService.rwApproval called with:', { id, data });
+        console.log('suratPengantarService.rwApproval called with:', { id, data });
         
         if (!id || typeof id !== 'string') {
             throw new Error('Invalid ID parameter');
@@ -295,13 +295,13 @@ const suratPengantarService = {
             console.log('RWApproval response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.rwApproval error:', error);
+            console.error('suratPengantarService.rwApproval error:', error);
             throw error;
         }
     },
 
     getRWStatistics: async (params = {}) => {
-        console.log('SuratPengantarService.getRWStatistics called with:', params);
+        console.log('suratPengantarService.getRWStatistics called with:', params);
         
         const validatedParams = {};
         
@@ -324,14 +324,14 @@ const suratPengantarService = {
             console.log('GetRWStatistics response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getRWStatistics error:', error);
+            console.error('suratPengantarService.getRWStatistics error:', error);
             throw error;
         }
     },
 
     // Admin Management
     getAdminStatistics: async (params = {}) => {
-        console.log('SuratPengantarService.getAdminStatistics called with:', params);
+        console.log('suratPengantarService.getAdminStatistics called with:', params);
         
         const validatedParams = {};
         
@@ -367,14 +367,14 @@ const suratPengantarService = {
             console.log('GetAdminStatistics response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('SuratPengantarService.getAdminStatistics error:', error);
+            console.error('suratPengantarService.getAdminStatistics error:', error);
             throw error;
         }
     },
 
     // QR Code verification (public)
     verifyQRCode: async (token) => {
-        console.log('SuratPengantarService.verifyQRCode called with token:', token);
+        console.log('suratPengantarService.verifyQRCode called with token:', token);
         
         if (!token || typeof token !== 'string') {
             throw new Error('Invalid verification token');
@@ -398,7 +398,7 @@ const suratPengantarService = {
             
             return data;
         } catch (error) {
-            console.error('SuratPengantarService.verifyQRCode error:', error);
+            console.error('suratPengantarService.verifyQRCode error:', error);
             throw error;
         }
     }
