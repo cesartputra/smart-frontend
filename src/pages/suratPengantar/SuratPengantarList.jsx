@@ -1,5 +1,5 @@
-// src/pages/suratPengantar/SuratPengantarList.jsx
-import { useState, useEffect } from 'react';
+// src/pages/suratPengantar/SuratPengantarList.jsx - FIXED VERSION
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
     FileText, 
@@ -13,101 +13,349 @@ import {
     AlertCircle,
     Search,
     Calendar,
-    User
+    User,
+    RefreshCw,
+    SlidersHorizontal
 } from 'lucide-react';
 import { useSuratPengantar } from '../../hooks/useSuratPengantar';
+import { StatCard, DataTable, StatusBadge } from '../../components/suratPengantar';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const SuratPengantarList = () => {
+    // State management dengan default values yang sesuai backend validation
     const [currentPage, setCurrentPage] = useState(1);
     const [statusFilter, setStatusFilter] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [sortBy, setSortBy] = useState('submitted_at');
+    const [sortOrder, setSortOrder] = useState('desc');
+    const [limit, setLimit] = useState(10);
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     
     const { 
-        myRequests, 
-        myRequestsLoading, 
-        fetchMyRequests, 
-        downloadPDF, 
-        isDownloading 
+        useMyRequests,
+        categories,
+        categoriesLoading,
+        fetchCategories,
+        downloadPDF,
+        validateStatus,
+        validatePagination
     } = useSuratPengantar();
 
-    useEffect(() => {
-        fetchMyRequests({
-            page: currentPage,
-            limit: 10,
-            status: statusFilter || undefined
-        });
-    }, [currentPage, statusFilter, fetchMyRequests]);
-
-    const getStatusBadge = (status) => {
-        const statusConfig = {
-            'DRAFT': {
-                color: 'bg-gray-100 text-gray-800',
-                icon: Clock,
-                text: 'Draft'
-            },
-            'SUBMITTED': {
-                color: 'bg-blue-100 text-blue-800',
-                icon: Clock,
-                text: 'Diajukan'
-            },
-            'RT_APPROVED': {
-                color: 'bg-yellow-100 text-yellow-800',
-                icon: AlertCircle,
-                text: 'Menunggu RW'
-            },
-            'COMPLETED': {
-                color: 'bg-green-100 text-green-800',
-                icon: CheckCircle,
-                text: 'Selesai'
-            },
-            'REJECTED': {
-                color: 'bg-red-100 text-red-800',
-                icon: XCircle,
-                text: 'Ditolak'
-            }
+    // Memoized query parameters dengan validation
+    const queryParams = useMemo(() => {
+        const validated = validatePagination ? validatePagination(currentPage, limit) : { page: currentPage, limit };
+        const params = {
+            page: validated.page,
+            limit: validated.limit
         };
 
-        const config = statusConfig[status] || statusConfig['DRAFT'];
-        const Icon = config.icon;
+        // Add filters only if they have valid values
+        if (statusFilter && validateStatus && validateStatus(statusFilter)) {
+            params.status = statusFilter;
+        }
 
+        if (searchTerm && searchTerm.trim().length >= 2) {
+            params.search = searchTerm.trim();
+        }
+
+        if (categoryFilter) {
+            const categoryId = parseInt(categoryFilter);
+            if (!isNaN(categoryId)) {
+                params.categoryId = categoryId;
+            }
+        }
+
+        if (sortBy) {
+            params.sortBy = sortBy;
+        }
+
+        if (sortOrder && ['asc', 'desc'].includes(sortOrder)) {
+            params.sortOrder = sortOrder;
+        }
+
+        return params;
+    }, [currentPage, limit, statusFilter, searchTerm, categoryFilter, sortBy, sortOrder, validateStatus, validatePagination]);
+
+    // Use the refactored hook - dengan fallback jika hook tidak tersedia
+    const myRequestsQuery = useMyRequests ? useMyRequests(queryParams) : { 
+        data: null, 
+        isLoading: false, 
+        isFetching: false, 
+        refetch: () => {} 
+    };
+
+    // Fetch categories on mount
+    useEffect(() => {
+        if (categories && categories.length === 0 && !categoriesLoading && fetchCategories) {
+            fetchCategories();
+        }
+    }, [categories, categoriesLoading, fetchCategories]);
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [statusFilter, searchTerm, categoryFilter, sortBy, sortOrder]);
+
+    // FIXED: Memoized data dengan proper array validation
+    const requestsData = useMemo(() => {
+        console.log('Raw myRequestsQuery.data:', myRequestsQuery.data); // Debug log
+        
+        if (!myRequestsQuery.data) {
+            return { data: [], pagination: { total: 0, totalPages: 0 } };
+        }
+
+        const response = myRequestsQuery.data;
+        let extractedData = [];
+        let extractedPagination = { total: 0, totalPages: 0 };
+        
+        // Handle different response structures
+        if (response.success && response.data) {
+            // Structure: { success: true, data: { requests: [...], pagination: {...} } }
+            extractedData = response.data.requests || response.data;
+            extractedPagination = response.data.pagination || response.pagination || {};
+        } else if (response.data && response.pagination) {
+            // Structure: { data: [...], pagination: {...} }
+            extractedData = response.data;
+            extractedPagination = response.pagination;
+        } else if (Array.isArray(response)) {
+            // Direct array response
+            extractedData = response;
+            extractedPagination = { total: response.length, totalPages: 1 };
+        } else if (Array.isArray(response.data)) {
+            // Structure: { data: [...] }
+            extractedData = response.data;
+            extractedPagination = response.pagination || { total: response.data.length, totalPages: 1 };
+        }
+
+        // SAFETY CHECK: Ensure data is always an array
+        if (!Array.isArray(extractedData)) {
+            console.warn('Data is not an array:', extractedData);
+            extractedData = [];
+        }
+
+        console.log('Processed data:', { data: extractedData, pagination: extractedPagination }); // Debug log
+
+        return { 
+            data: extractedData, 
+            pagination: extractedPagination 
+        };
+    }, [myRequestsQuery.data]);
+
+    // Status configuration untuk badge
+    const getStatusBadge = useCallback((status) => {
+        if (StatusBadge) {
+            return <StatusBadge status={status} size="sm" />;
+        }
+        
+        // Fallback jika StatusBadge tidak tersedia
+        const statusConfig = {
+            'DRAFT': { color: 'bg-gray-100 text-gray-800', text: 'Draft' },
+            'SUBMITTED': { color: 'bg-blue-100 text-blue-800', text: 'Diajukan' },
+            'RT_APPROVED': { color: 'bg-yellow-100 text-yellow-800', text: 'Menunggu RW' },
+            'COMPLETED': { color: 'bg-green-100 text-green-800', text: 'Selesai' },
+            'REJECTED': { color: 'bg-red-100 text-red-800', text: 'Ditolak' }
+        };
+        
+        const config = statusConfig[status] || statusConfig['DRAFT'];
         return (
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
-                <Icon className="h-3 w-3 mr-1" />
                 {config.text}
             </span>
         );
-    };
+    }, []);
 
-    const formatDate = (dateString) => {
+    // Format date helper
+    const formatDate = useCallback((dateString) => {
         if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        });
-    };
+        try {
+            return new Date(dateString).toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return '-';
+        }
+    }, []);
 
-    const handleDownload = (id) => {
-        downloadPDF(id);
-    };
+    // Handle download with proper error handling
+    const handleDownload = useCallback(async (id) => {
+        if (!downloadPDF) {
+            console.error('downloadPDF function not available');
+            return;
+        }
+        
+        try {
+            await downloadPDF(id);
+        } catch (error) {
+            console.error('Download error:', error);
+        }
+    }, [downloadPDF]);
 
-    const filteredRequests = myRequests.data?.filter(request => {
-        const matchesSearch = searchTerm === '' || 
-            request.category_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            request.full_name.toLowerCase().includes(searchTerm.toLowerCase());
-        return matchesSearch;
-    }) || [];
+    // FIXED: Memoized stats dengan proper array validation
+    const stats = useMemo(() => {
+        const data = requestsData.data;
+        
+        // SAFETY CHECK: Ensure data is array before using filter
+        const safeData = Array.isArray(data) ? data : [];
+        
+        return [
+            { 
+                label: 'Total Pengajuan', 
+                value: requestsData.pagination?.total || safeData.length, 
+                color: 'blue',
+                icon: FileText
+            },
+            { 
+                label: 'Dalam Proses', 
+                value: safeData.filter(r => ['SUBMITTED', 'RT_APPROVED'].includes(r?.status)).length, 
+                color: 'yellow',
+                icon: Clock
+            },
+            { 
+                label: 'Selesai', 
+                value: safeData.filter(r => r?.status === 'COMPLETED').length, 
+                color: 'green',
+                icon: CheckCircle
+            },
+            { 
+                label: 'Ditolak', 
+                value: safeData.filter(r => r?.status === 'REJECTED').length, 
+                color: 'red',
+                icon: XCircle
+            }
+        ];
+    }, [requestsData]);
 
-    if (myRequestsLoading) {
-        return (
-            <div className="min-h-screen bg-gray-50 py-8">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <LoadingSpinner text="Memuat daftar surat pengantar..." />
+    // Table columns definition
+    const tableColumns = useMemo(() => [
+        {
+            key: 'category',
+            title: 'Kategori Surat',
+            width: '25%',
+            render: (request) => (
+                <div className="flex items-center">
+                    <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                        <FileText className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                        <div className="text-sm font-medium text-gray-900">
+                            {request?.category_name || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            ID: {request?.id ? request.id.substring(0, 8) + '...' : 'N/A'}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        );
-    }
+            )
+        },
+        {
+            key: 'requester',
+            title: 'Pemohon',
+            width: '20%',
+            render: (request) => (
+                <div className="flex items-center">
+                    <User className="h-4 w-4 text-gray-400 mr-2" />
+                    <div>
+                        <div className="text-sm font-medium text-gray-900">
+                            {request?.full_name || 'N/A'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                            NIK: {request?.nik ? 
+                                request.nik.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-****-****-$4') : 
+                                'N/A'
+                            }
+                        </div>
+                    </div>
+                </div>
+            )
+        },
+        {
+            key: 'status',
+            title: 'Status',
+            width: '15%',
+            render: (request) => getStatusBadge(request?.status || 'DRAFT')
+        },
+        {
+            key: 'date',
+            title: 'Tanggal Pengajuan',
+            width: '20%',
+            render: (request) => (
+                <div className="flex items-center text-sm text-gray-500">
+                    <Calendar className="h-4 w-4 mr-1" />
+                    {formatDate(request?.submitted_at)}
+                </div>
+            )
+        },
+        {
+            key: 'actions',
+            title: 'Aksi',
+            width: '20%',
+            render: (request) => (
+                <div className="flex space-x-2">
+                    <Link
+                        to={`/surat-pengantar/${request?.id || ''}`}
+                        className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                    >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Detail
+                    </Link>
+                    
+                    {request?.status === 'COMPLETED' && (
+                        <button
+                            onClick={() => handleDownload(request.id)}
+                            className="inline-flex items-center px-3 py-1 border border-green-300 rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors duration-200"
+                        >
+                            <Download className="h-4 w-4 mr-1" />
+                            PDF
+                        </button>
+                    )}
+                </div>
+            )
+        }
+    ], [getStatusBadge, formatDate, handleDownload]);
+
+    // Event handlers
+    const handleRefresh = useCallback(() => {
+        if (myRequestsQuery.refetch) {
+            myRequestsQuery.refetch();
+        }
+    }, [myRequestsQuery]);
+
+    const handlePageChange = useCallback((page) => {
+        setCurrentPage(page);
+    }, []);
+
+    const handleSearch = useCallback((value) => {
+        setSearchTerm(value);
+    }, []);
+
+    const handleStatusFilter = useCallback((status) => {
+        setStatusFilter(status);
+    }, []);
+
+    const handleCategoryFilter = useCallback((categoryId) => {
+        setCategoryFilter(categoryId);
+    }, []);
+
+    const handleSortChange = useCallback((field, order) => {
+        setSortBy(field);
+        setSortOrder(order);
+    }, []);
+
+    const clearFilters = useCallback(() => {
+        setStatusFilter('');
+        setSearchTerm('');
+        setCategoryFilter('');
+        setSortBy('submitted_at');
+        setSortOrder('desc');
+        setCurrentPage(1);
+    }, []);
+
+    // SAFETY CHECK: Ensure categories is always an array
+    const safeCategories = Array.isArray(categories) ? categories : [];
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
@@ -135,273 +383,234 @@ const SuratPengantarList = () => {
                     {/* Quick Stats */}
                     <div className="p-6 border-b border-gray-200">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {[
-                                { label: 'Total Pengajuan', value: myRequests.pagination?.total || 0, color: 'text-blue-600' },
-                                { 
-                                    label: 'Dalam Proses', 
-                                    value: filteredRequests.filter(r => ['SUBMITTED', 'RT_APPROVED'].includes(r.status)).length, 
-                                    color: 'text-yellow-600' 
-                                },
-                                { 
-                                    label: 'Selesai', 
-                                    value: filteredRequests.filter(r => r.status === 'COMPLETED').length, 
-                                    color: 'text-green-600' 
-                                },
-                                { 
-                                    label: 'Ditolak', 
-                                    value: filteredRequests.filter(r => r.status === 'REJECTED').length, 
-                                    color: 'text-red-600' 
-                                }
-                            ].map((stat, index) => (
-                                <div key={index} className="text-center">
-                                    <div className={`text-2xl font-bold ${stat.color}`}>
-                                        {stat.value}
+                            {stats.map((stat, index) => (
+                                StatCard ? (
+                                    <StatCard
+                                        key={index}
+                                        title={stat.label}
+                                        value={stat.value}
+                                        icon={stat.icon}
+                                        color={stat.color}
+                                        loading={myRequestsQuery.isLoading}
+                                    />
+                                ) : (
+                                    // Fallback StatCard jika komponen tidak tersedia
+                                    <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
+                                            <stat.icon className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                        <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
                                     </div>
-                                    <div className="text-sm text-gray-500">{stat.label}</div>
-                                </div>
+                                )
                             ))}
                         </div>
                     </div>
 
                     {/* Action Bar */}
                     <div className="p-6">
-                        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-                            <div className="flex flex-col sm:flex-row gap-4 flex-1">
-                                {/* Search */}
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                    <input
-                                        type="text"
-                                        placeholder="Cari berdasarkan kategori atau nama..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-80"
-                                    />
+                        <div className="flex flex-col gap-4">
+                            {/* Top Row - Search and Primary Actions */}
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between">
+                                <div className="flex flex-col sm:flex-row gap-4 flex-1">
+                                    {/* Search */}
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                        <input
+                                            type="text"
+                                            placeholder="Cari berdasarkan kategori atau nama..."
+                                            value={searchTerm}
+                                            onChange={(e) => handleSearch(e.target.value)}
+                                            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-80"
+                                        />
+                                    </div>
+
+                                    {/* Quick Filters */}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                                            className="flex items-center px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                                        >
+                                            <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                            Filter
+                                        </button>
+                                        
+                                        <button
+                                            onClick={handleRefresh}
+                                            disabled={myRequestsQuery.isFetching}
+                                            className="flex items-center px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50"
+                                        >
+                                            <RefreshCw className={`h-4 w-4 mr-2 ${myRequestsQuery.isFetching ? 'animate-spin' : ''}`} />
+                                            Refresh
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* Status Filter */}
-                                <div className="relative">
-                                    <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                                    <select
-                                        value={statusFilter}
-                                        onChange={(e) => setStatusFilter(e.target.value)}
-                                        className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                                    >
-                                        <option value="">Semua Status</option>
-                                        <option value="SUBMITTED">Diajukan</option>
-                                        <option value="RT_APPROVED">Menunggu RW</option>
-                                        <option value="COMPLETED">Selesai</option>
-                                        <option value="REJECTED">Ditolak</option>
-                                    </select>
-                                </div>
+                                {/* Add New Button */}
+                                <Link
+                                    to="/surat-pengantar/create"
+                                    className="flex items-center justify-center px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Buat Pengajuan Baru
+                                </Link>
                             </div>
 
-                            {/* Add New Button */}
-                            <Link
-                                to="/surat-pengantar/create"
-                                className="flex items-center justify-center px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Buat Pengajuan Baru
-                            </Link>
+                            {/* Advanced Filters */}
+                            {showAdvancedFilters && (
+                                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {/* Status Filter */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Status
+                                            </label>
+                                            <select
+                                                value={statusFilter}
+                                                onChange={(e) => handleStatusFilter(e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            >
+                                                <option value="">Semua Status</option>
+                                                <option value="DRAFT">Draft</option>
+                                                <option value="SUBMITTED">Diajukan</option>
+                                                <option value="RT_APPROVED">Menunggu RW</option>
+                                                <option value="COMPLETED">Selesai</option>
+                                                <option value="REJECTED">Ditolak</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Category Filter */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Kategori
+                                            </label>
+                                            <select
+                                                value={categoryFilter}
+                                                onChange={(e) => handleCategoryFilter(e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                disabled={categoriesLoading}
+                                            >
+                                                <option value="">Semua Kategori</option>
+                                                {safeCategories.map((category) => (
+                                                    <option key={category?.id || Math.random()} value={category?.id || ''}>
+                                                        {category?.name || 'N/A'}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Sort Options */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Urutkan
+                                            </label>
+                                            <select
+                                                value={`${sortBy}-${sortOrder}`}
+                                                onChange={(e) => {
+                                                    const [field, order] = e.target.value.split('-');
+                                                    handleSortChange(field, order);
+                                                }}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            >
+                                                <option value="submitted_at-desc">Terbaru</option>
+                                                <option value="submitted_at-asc">Terlama</option>
+                                                <option value="category_name-asc">Kategori A-Z</option>
+                                                <option value="category_name-desc">Kategori Z-A</option>
+                                                <option value="status-asc">Status A-Z</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Clear Filters */}
+                                    <div className="mt-4 flex justify-end">
+                                        <button
+                                            onClick={clearFilters}
+                                            className="px-4 py-2 text-gray-600 hover:text-gray-900 transition-colors duration-200"
+                                        >
+                                            Reset Filter
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                {/* Requests List */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    {filteredRequests.length === 0 ? (
-                        <div className="text-center py-12">
-                            <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                Belum Ada Pengajuan
-                            </h3>
-                            <p className="text-gray-500 mb-6">
-                                Anda belum memiliki pengajuan surat pengantar
-                            </p>
-                            <Link
-                                to="/surat-pengantar/create"
-                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Buat Pengajuan Pertama
-                            </Link>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Kategori Surat
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Pemohon
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Status
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Tanggal Pengajuan
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Aksi
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {filteredRequests.map((request) => (
-                                        <tr key={request.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                                        <FileText className="h-5 w-5 text-blue-600" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {request.category_name}
-                                                        </div>
-                                                        <div className="text-sm text-gray-500">
-                                                            ID: {request.id.substring(0, 8)}...
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center">
-                                                    <User className="h-4 w-4 text-gray-400 mr-2" />
-                                                    <div>
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {request.full_name}
-                                                        </div>
-                                                        <div className="text-sm text-gray-500">
-                                                            NIK: {request.nik?.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1-****-****-$4')}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {getStatusBadge(request.status)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center text-sm text-gray-500">
-                                                    <Calendar className="h-4 w-4 mr-1" />
-                                                    {formatDate(request.submitted_at)}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <div className="flex space-x-2">
-                                                    <Link
-                                                        to={`/surat-pengantar/${request.id}`}
-                                                        className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
-                                                    >
-                                                        <Eye className="h-4 w-4 mr-1" />
-                                                        Detail
-                                                    </Link>
-                                                    
-                                                    {request.status === 'COMPLETED' && (
-                                                        <button
-                                                            onClick={() => handleDownload(request.id)}
-                                                            disabled={isDownloading}
-                                                            className="inline-flex items-center px-3 py-1 border border-green-300 rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-                                                        >
-                                                            <Download className="h-4 w-4 mr-1" />
-                                                            {isDownloading ? 'Downloading...' : 'Download'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {/* Pagination */}
-                    {myRequests.pagination && myRequests.pagination.totalPages > 1 && (
-                        <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-                            <div className="flex items-center justify-between">
-                                <div className="flex-1 flex justify-between sm:hidden">
-                                    <button
-                                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                                        disabled={currentPage === 1}
-                                        className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        Sebelumnya
-                                    </button>
-                                    <button
-                                        onClick={() => setCurrentPage(Math.min(myRequests.pagination.totalPages, currentPage + 1))}
-                                        disabled={currentPage === myRequests.pagination.totalPages}
-                                        className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        Selanjutnya
-                                    </button>
-                                </div>
-                                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-700">
-                                            Menampilkan{' '}
-                                            <span className="font-medium">
-                                                {((currentPage - 1) * 10) + 1}
-                                            </span>{' '}
-                                            sampai{' '}
-                                            <span className="font-medium">
-                                                {Math.min(currentPage * 10, myRequests.pagination.total)}
-                                            </span>{' '}
-                                            dari{' '}
-                                            <span className="font-medium">{myRequests.pagination.total}</span>{' '}
-                                            hasil
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                                            <button
-                                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                                                disabled={currentPage === 1}
-                                                className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                <span className="sr-only">Sebelumnya</span>
-                                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                    <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                </svg>
-                                            </button>
-                                            
-                                            {/* Page numbers */}
-                                            {Array.from({ length: Math.min(5, myRequests.pagination.totalPages) }, (_, i) => {
-                                                const pageNum = i + 1;
-                                                return (
-                                                    <button
-                                                        key={pageNum}
-                                                        onClick={() => setCurrentPage(pageNum)}
-                                                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                                            currentPage === pageNum
-                                                                ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                                                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                                                        }`}
-                                                    >
-                                                        {pageNum}
-                                                    </button>
-                                                );
-                                            })}
-
-                                            <button
-                                                onClick={() => setCurrentPage(Math.min(myRequests.pagination.totalPages, currentPage + 1))}
-                                                disabled={currentPage === myRequests.pagination.totalPages}
-                                                className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                <span className="sr-only">Selanjutnya</span>
-                                                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                                </svg>
-                                            </button>
-                                        </nav>
-                                    </div>
-                                </div>
+                {/* Requests Table */}
+                {DataTable ? (
+                    <DataTable
+                        columns={tableColumns}
+                        data={requestsData.data}
+                        loading={myRequestsQuery.isLoading}
+                        pagination={{
+                            currentPage,
+                            totalPages: requestsData.pagination?.totalPages || 1,
+                            total: requestsData.pagination?.total || 0,
+                            limit
+                        }}
+                        onPageChange={handlePageChange}
+                        emptyMessage="Belum Ada Pengajuan"
+                        emptyDescription="Anda belum memiliki pengajuan surat pengantar. Klik tombol 'Buat Pengajuan Baru' untuk memulai."
+                        emptyIcon={FileText}
+                    />
+                ) : (
+                    // Fallback table jika DataTable tidak tersedia
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        {requestsData.data.length === 0 ? (
+                            <div className="text-center py-12">
+                                <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                    Belum Ada Pengajuan
+                                </h3>
+                                <p className="text-gray-500 mb-6">
+                                    Anda belum memiliki pengajuan surat pengantar
+                                </p>
+                                <Link
+                                    to="/surat-pengantar/create"
+                                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Buat Pengajuan Pertama
+                                </Link>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Kategori Surat
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Pemohon
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Status
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Tanggal Pengajuan
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Aksi
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {requestsData.data.map((request, index) => (
+                                            <tr key={request?.id || index} className="hover:bg-gray-50">
+                                                {tableColumns.map((column, colIndex) => (
+                                                    <td key={colIndex} className="px-6 py-4 whitespace-nowrap">
+                                                        {column.render ? column.render(request) : request[column.key] || '-'}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Quick Guide */}
                 <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">

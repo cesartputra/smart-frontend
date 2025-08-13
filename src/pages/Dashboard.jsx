@@ -2,6 +2,8 @@
 import { LogOut, User, Settings, Bell, Home } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import useAuthStore from '../store/authStore';
+import NavigationCard from '../components/common/NavigationCard';
+import { MessageSquare } from 'lucide-react';
 
 const Dashboard = () => {
     const { logout, isLoggingOut } = useAuth();
@@ -165,7 +167,17 @@ const Dashboard = () => {
                     </div>
                     </button>
 
-                    <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                    
+
+                    <NavigationCard
+                    to="/surat-pengantar"
+                    icon={MessageSquare}
+                    title="Surat Pengantar"
+                    description="Pengajuan surat pengantar dan correspondence"
+                    color="green"
+                    />
+
+                    {/* <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                     <div className="flex items-center">
                         <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
                         <Home className="h-5 w-5 text-green-600" />
@@ -175,7 +187,7 @@ const Dashboard = () => {
                         <p className="text-sm text-gray-500">Pengajuan surat</p>
                         </div>
                     </div>
-                    </button>
+                    </button> */}
 
                     <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                     <div className="flex items-center">

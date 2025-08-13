@@ -11,11 +11,12 @@ import {
     User,
     Calendar,
     Home,
-    MessageSquare
+    MessageSquare,
+    AlertTriangle
 } from 'lucide-react';
 import { useSuratPengantar } from '../../hooks/useSuratPengantar';
-import { StatCard, DataTable, StatusBadge } from '../../components/suratPengantar';
-import ApprovalModal from '../../components/suratPengantar/ApprovalModal';
+import { StatCard, DataTable, StatusBadge, ApprovalModal } from '../../components/suratPengantar';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 const RWDashboard = () => {
     const [currentPage, setCurrentPage] = useState(1);
@@ -24,32 +25,26 @@ const RWDashboard = () => {
     const [selectedPeriod, setSelectedPeriod] = useState('month');
     
     const { 
-        usePendingRW,
-        useStatistics,
+        pendingRWRequests,
+        pendingRWLoading,
+        fetchPendingRW,
         rwApproval,
-        isRWProcessing
+        isRWProcessing,
+        statistics,
+        statisticsLoading,
+        fetchStatistics
     } = useSuratPengantar();
 
-    // Optimized query dengan dependency yang tepat
-    const pendingQuery = usePendingRW({ 
-        page: currentPage, 
-        limit: 10 
-    });
+    // Fetch data saat komponen dimount dan ketika dependencies berubah
+    useEffect(() => {
+        fetchPendingRW({ page: currentPage, limit: 10 });
+        fetchStatistics({ period: selectedPeriod });
+    }, [currentPage, selectedPeriod, fetchPendingRW, fetchStatistics]);
 
-    const statisticsQuery = useStatistics({ 
-        period: selectedPeriod,
-        role: 'RW'
-    });
-
-    // Memoized data untuk mencegah re-render
+    // Memoized data untuk mencegah re-render yang tidak perlu
     const pendingRequests = useMemo(() => 
-        pendingQuery.data || { data: [], pagination: {} }, 
-        [pendingQuery.data]
-    );
-
-    const statistics = useMemo(() => 
-        statisticsQuery.data || {}, 
-        [statisticsQuery.data]
+        pendingRWRequests || { data: [], pagination: {} }, 
+        [pendingRWRequests]
     );
 
     // Memoized stats cards
@@ -58,7 +53,7 @@ const RWDashboard = () => {
             title: 'Menunggu RW', 
             value: pendingRequests.pagination?.total || 0, 
             icon: Clock,
-            color: 'yellow',
+            color: 'orange',
             trend: 'neutral'
         },
         { 
@@ -95,11 +90,47 @@ const RWDashboard = () => {
         }
     ], [pendingRequests.pagination?.total, statistics]);
 
+    // Function untuk menghasilkan badge prioritas
+    const getPriorityBadge = useCallback((rtApprovedAt) => {
+        const daysSince = Math.floor((new Date() - new Date(rtApprovedAt)) / (1000 * 60 * 60 * 24));
+        
+        if (daysSince >= 5) {
+            return (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    Sangat Mendesak ({daysSince} hari)
+                </span>
+            );
+        } else if (daysSince >= 3) {
+            return (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    Mendesak ({daysSince} hari)
+                </span>
+            );
+        } else if (daysSince >= 1) {
+            return (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {daysSince} hari
+                </span>
+            );
+        }
+        
+        return (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <Clock className="h-3 w-3 mr-1" />
+                Baru dari RT
+            </span>
+        );
+    }, []);
+
     // Optimized columns untuk DataTable
     const tableColumns = useMemo(() => [
         {
             key: 'category',
             title: 'Pengajuan',
+            width: '25%',
             render: (request) => (
                 <div className="flex items-center">
                     <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
@@ -119,6 +150,7 @@ const RWDashboard = () => {
         {
             key: 'requester',
             title: 'Pemohon & Lokasi',
+            width: '25%',
             render: (request) => (
                 <div className="flex items-center">
                     <User className="h-4 w-4 text-gray-400 mr-2" />
@@ -137,6 +169,7 @@ const RWDashboard = () => {
         {
             key: 'rt_approved',
             title: 'Disetujui RT',
+            width: '20%',
             render: (request) => (
                 <div className="flex items-center text-sm text-gray-500">
                     <Calendar className="h-4 w-4 mr-1" />
@@ -150,43 +183,13 @@ const RWDashboard = () => {
         {
             key: 'priority',
             title: 'Prioritas',
-            render: (request) => {
-                const daysSince = Math.floor((new Date() - new Date(request.rt_approved_at)) / (1000 * 60 * 60 * 24));
-                
-                if (daysSince >= 5) {
-                    return (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Sangat Mendesak ({daysSince} hari)
-                        </span>
-                    );
-                } else if (daysSince >= 3) {
-                    return (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Mendesak ({daysSince} hari)
-                        </span>
-                    );
-                } else if (daysSince >= 1) {
-                    return (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {daysSince} hari
-                        </span>
-                    );
-                }
-                
-                return (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        <Clock className="h-3 w-3 mr-1" />
-                        Baru dari RT
-                    </span>
-                );
-            }
+            width: '20%',
+            render: (request) => getPriorityBadge(request.rt_approved_at)
         },
         {
             key: 'actions',
             title: 'Aksi',
+            width: '10%',
             render: (request) => (
                 <button
                     onClick={() => handleApproval(request)}
@@ -197,7 +200,7 @@ const RWDashboard = () => {
                 </button>
             )
         }
-    ], []);
+    ], [getPriorityBadge]);
 
     // Optimized callbacks
     const handleApproval = useCallback((request) => {
@@ -285,7 +288,7 @@ const RWDashboard = () => {
                                     color={stat.color}
                                     trend={stat.trend}
                                     trendValue={stat.trendValue}
-                                    loading={statisticsQuery.isLoading}
+                                    loading={statisticsLoading}
                                 />
                             ))}
                         </div>
@@ -333,7 +336,7 @@ const RWDashboard = () => {
                     <DataTable
                         columns={tableColumns}
                         data={pendingRequests.data}
-                        loading={pendingQuery.isLoading}
+                        loading={pendingRWLoading}
                         pagination={{
                             currentPage,
                             totalPages: pendingRequests.pagination?.totalPages || 1,
@@ -342,6 +345,7 @@ const RWDashboard = () => {
                         }}
                         onPageChange={handlePageChange}
                         emptyMessage="Tidak Ada Pengajuan Pending"
+                        emptyDescription="Semua pengajuan dari RT sudah diproses atau belum ada pengajuan baru"
                         emptyIcon={CheckCircle}
                     />
                 </div>
