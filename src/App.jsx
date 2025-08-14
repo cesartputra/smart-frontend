@@ -109,7 +109,7 @@ function App() {
                     ======================================== */}
                 
                 {/* Test & Landing Page */}
-                <Route path="/test" element={<TestPage />} />
+                <Route path="/" element={<TestPage />} />
                 
                 {/* Authentication Routes */}
                 <Route path="/login" element={<Login />} />
