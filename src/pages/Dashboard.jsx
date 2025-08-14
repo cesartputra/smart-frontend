@@ -103,14 +103,14 @@ const Dashboard = () => {
     return (
         <div className="min-h-screen bg-gray-50">
             {/* DEBUGGING INFO */}
-            <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4">
+            {/* <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4">
                 <p className="font-bold">🐛 DEBUG INFO:</p>
                 <p>• Raw rolesData: {JSON.stringify(rolesData, null, 2)}</p>
                 <p>• Extracted userRoles: {JSON.stringify(userRoles?.map(r => r.role_name))}</p>
                 <p>• isKetuaRT: {isKetuaRT.toString()}</p>
                 <p>• pendingRTCount: {pendingRTCount}</p>
                 <p>• rtInfo: {JSON.stringify(rtInfo)}</p>
-            </div>
+            </div> */}
 
             {/* Header */}
             <header className="bg-white shadow-sm border-b border-gray-200">
@@ -320,7 +320,7 @@ const Dashboard = () => {
                                 )}
 
                                 {/* Debug Info Card - hanya untuk testing */}
-                                {isKetuaRT && (
+                                {/* {isKetuaRT && (
                                     <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
                                         <div className="text-xs text-green-800 space-y-1">
                                             <p><strong>✅ KETUA RT DETECTED!</strong></p>
@@ -330,7 +330,7 @@ const Dashboard = () => {
                                             <p>• Pending: {pendingRTCount}</p>
                                         </div>
                                     </div>
-                                )}
+                                )} */}
 
                                 {/* Standard menus */}
                                 <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">

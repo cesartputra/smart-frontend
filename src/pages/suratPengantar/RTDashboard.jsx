@@ -520,7 +520,7 @@ const RTDashboard = () => {
                         <div className="p-8">
                             <LoadingSpinner text="Memuat pengajuan..." />
                         </div>
-                    ) : pendingRequests.data?.length === 0 ? (
+                    ) : pendingRequests.data.data?.length === 0 ? (
                         <div className="text-center py-12">
                             <CheckCircle className="mx-auto h-12 w-12 text-green-400 mb-4" />
                             <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -553,7 +553,7 @@ const RTDashboard = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {pendingRequests.data?.map((request) => (
+                                    {pendingRequests.data.data?.map((request) => (
                                         <tr key={request.id} className="hover:bg-gray-50">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center">
