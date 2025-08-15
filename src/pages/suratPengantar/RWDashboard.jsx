@@ -24,16 +24,37 @@ const RWDashboard = () => {
     const [showApprovalModal, setShowApprovalModal] = useState(false);
     const [selectedPeriod, setSelectedPeriod] = useState('month');
     
+    // Pastikan hook calls safe dengan error handling
     const { 
-        pendingRWRequests,
-        pendingRWLoading,
-        fetchPendingRW,
+        usePendingRW,
+        useStatistics,
         rwApproval,
-        isRWProcessing,
-        statistics,
-        statisticsLoading,
-        fetchStatistics
+        isRWProcessing
     } = useSuratPengantar();
+
+    // Safe hook calls dengan error handling
+    const pendingRWQuery = usePendingRW ? usePendingRW({ 
+        page: currentPage, 
+        limit: 10 
+    }) : { 
+        data: null, 
+        isLoading: false, 
+        error: null 
+    };
+
+    const statisticsQuery = useStatistics ? useStatistics({ 
+        period: selectedPeriod 
+    }) : { 
+        data: null, 
+        isLoading: false, 
+        error: null 
+    };
+
+    // Alias untuk backward compatibility
+    const pendingRWRequests = pendingRWQuery.data;
+    const pendingRWLoading = pendingRWQuery.isLoading;
+    const statistics = statisticsQuery.data;
+    const statisticsLoading = statisticsQuery.isLoading;
 
     // Fetch data saat komponen dimount dan ketika dependencies berubah
     useEffect(() => {
@@ -42,23 +63,106 @@ const RWDashboard = () => {
     }, [currentPage, selectedPeriod, fetchPendingRW, fetchStatistics]);
 
     // Memoized data untuk mencegah re-render yang tidak perlu
-    const pendingRequests = useMemo(() => 
-        pendingRWRequests || { data: [], pagination: {} }, 
-        [pendingRWRequests]
-    );
+    const pendingRequests = useMemo(() => {
+        // ✅ Always return safe structure
+        const defaultResponse = { 
+            data: [], 
+            pagination: { 
+                total: 0, 
+                totalPages: 1, 
+                currentPage: 1,
+                limit: 10 
+            } 
+        };
+    
+        if (!pendingRWRequests) {
+            console.log('📊 No pendingRWRequests data, using defaults');
+            return defaultResponse;
+        }
+    
+        console.log('📊 Processing pendingRWRequests:', pendingRWRequests);
+    
+        try {
+            // Handle different response structures
+            if (pendingRWRequests.success && pendingRWRequests.data) {
+                return {
+                    data: pendingRWRequests.data.data || pendingRWRequests.data.requests || [],
+                    pagination: {
+                        ...defaultResponse.pagination,
+                        ...pendingRWRequests.data.pagination
+                    }
+                };
+            }
+            
+            if (pendingRWRequests.data && pendingRWRequests.pagination) {
+                return {
+                    data: pendingRWRequests.data || [],
+                    pagination: {
+                        ...defaultResponse.pagination,
+                        ...pendingRWRequests.pagination
+                    }
+                };
+            }
+            
+            if (Array.isArray(pendingRWRequests)) {
+                return {
+                    data: pendingRWRequests,
+                    pagination: {
+                        ...defaultResponse.pagination,
+                        total: pendingRWRequests.length
+                    }
+                };
+            }
+    
+            console.warn('⚠️ Unexpected pendingRWRequests structure:', pendingRWRequests);
+            return defaultResponse;
+            
+        } catch (error) {
+            console.error('❌ Error processing pendingRWRequests:', error);
+            return defaultResponse;
+        }
+    }, [pendingRWRequests]);
+
+    // Safe statistics processing
+    const safeStatistics = useMemo(() => {
+        const defaultStats = {
+            total: 0,
+            byStatus: {
+                COMPLETED: 0,
+                REJECTED: 0,
+                SUBMITTED: 0,
+                RT_APPROVED: 0
+            },
+            avgProcessingTime: null
+        };
+
+        if (!statistics) {
+            return defaultStats;
+        }
+
+        return {
+            ...defaultStats,
+            ...statistics,
+            byStatus: {
+                ...defaultStats.byStatus,
+                ...statistics.byStatus
+            }
+        };
+    }, [statistics]);
 
     // Memoized stats cards
+    // Update statsCards untuk menggunakan safeStatistics
     const statsCards = useMemo(() => [
         { 
             title: 'Menunggu RW', 
-            value: pendingRequests.pagination?.total || 0, 
+            value: pendingRequests.pagination.total, // ✅ Now safe
             icon: Clock,
             color: 'orange',
             trend: 'neutral'
         },
         { 
             title: 'Total Bulan Ini', 
-            value: statistics.total || 0, 
+            value: safeStatistics.total,
             icon: FileText,
             color: 'purple',
             trend: 'up',
@@ -66,7 +170,7 @@ const RWDashboard = () => {
         },
         { 
             title: 'Diselesaikan', 
-            value: statistics.byStatus?.COMPLETED || 0, 
+            value: safeStatistics.byStatus.COMPLETED,
             icon: CheckCircle,
             color: 'green',
             trend: 'up',
@@ -74,7 +178,7 @@ const RWDashboard = () => {
         },
         { 
             title: 'Ditolak RW', 
-            value: statistics.byStatus?.REJECTED || 0, 
+            value: safeStatistics.byStatus.REJECTED,
             icon: XCircle,
             color: 'red',
             trend: 'down',
@@ -82,13 +186,13 @@ const RWDashboard = () => {
         },
         { 
             title: 'Rata-rata Proses', 
-            value: statistics.avgProcessingTime ? `${statistics.avgProcessingTime} hari` : '-', 
+            value: safeStatistics.avgProcessingTime ? `${safeStatistics.avgProcessingTime} hari` : '-', 
             icon: TrendingUp,
             color: 'blue',
             trend: 'down',
             trendValue: '-2 hari'
         }
-    ], [pendingRequests.pagination?.total, statistics]);
+    ], [pendingRequests.pagination.total, safeStatistics]);
 
     // Function untuk menghasilkan badge prioritas
     const getPriorityBadge = useCallback((rtApprovedAt) => {
@@ -228,34 +332,71 @@ const RWDashboard = () => {
     }, []);
 
     // Memoized performance summary
+    // Memoized performance summary dengan safe access
     const performanceSummary = useMemo(() => [
         {
             title: 'Efisiensi Proses',
-            value: statistics.avgProcessingTime ? `Rata-rata ${statistics.avgProcessingTime} hari` : 'Belum ada data',
+            value: safeStatistics.avgProcessingTime ? 
+                `Rata-rata ${safeStatistics.avgProcessingTime} hari` : 
+                'Belum ada data',
             icon: BarChart3,
             color: 'blue'
         },
         {
             title: 'Tingkat Persetujuan',
-            value: statistics.total > 0 ? 
-                `${Math.round(((statistics.byStatus?.COMPLETED || 0) / statistics.total) * 100)}% disetujui` :
+            value: safeStatistics.total > 0 ? 
+                `${Math.round((safeStatistics.byStatus.COMPLETED / safeStatistics.total) * 100)}% disetujui` :
                 'Belum ada data',
             icon: TrendingUp,
             color: 'green'
         },
         {
             title: 'Status Sistem',
-            value: pendingRequests.pagination?.total === 0 ? 
+            value: pendingRequests.pagination.total === 0 ? 
                 'Semua terkini' : 
-                `${pendingRequests.pagination?.total || 0} menunggu`,
+                `${pendingRequests.pagination.total} menunggu`,
             icon: Shield,
             color: 'purple'
         }
-    ], [statistics, pendingRequests.pagination?.total]);
+    ], [safeStatistics, pendingRequests.pagination.total]);
+
+    // Tambahkan conditional rendering untuk loading states
+    if (pendingRWLoading && !pendingRWRequests) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <LoadingSpinner text="Memuat dashboard RW..." />
+            </div>
+        );
+    }
+
+    // Error state handling
+    if (pendingRWQuery.error && !pendingRWRequests) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+                    <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                        Error Memuat Dashboard
+                    </h2>
+                    <p className="text-red-600 mb-4">
+                        {pendingRWQuery.error.message || 'Terjadi kesalahan saat memuat data'}
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Refresh Halaman
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                
+
                 {/* Header */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
                     <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-8">
@@ -335,12 +476,12 @@ const RWDashboard = () => {
 
                     <DataTable
                         columns={tableColumns}
-                        data={pendingRequests.data}
+                        data={pendingRequests.data} // ✅ Now guaranteed to be array
                         loading={pendingRWLoading}
                         pagination={{
                             currentPage,
-                            totalPages: pendingRequests.pagination?.totalPages || 1,
-                            total: pendingRequests.pagination?.total || 0,
+                            totalPages: pendingRequests.pagination.totalPages,
+                            total: pendingRequests.pagination.total,
                             limit: 10
                         }}
                         onPageChange={handlePageChange}

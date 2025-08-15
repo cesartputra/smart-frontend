@@ -14,6 +14,8 @@ const Dashboard = () => {
     const [pendingRTCount, setPendingRTCount] = useState(0);
     const [userRoles, setUserRoles] = useState([]);
     const [isKetuaRT, setIsKetuaRT] = useState(false);
+    const [pendingRWCount, setPendingRWCount] = useState(0);
+    const [isKetuaRW, setIsKetuaRW] = useState(false);
 
     // Direct API call untuk get roles - bypass hook untuk debug
     const { data: rolesData, isLoading: rolesLoading } = useQuery({
@@ -34,7 +36,7 @@ const Dashboard = () => {
         }
     });
 
-    // Extract roles dan check Ketua RT
+    // Extract roles dan check Ketua RW
     useEffect(() => {
         if (rolesData) {
             console.log('🔍 Processing roles data:', rolesData);
@@ -44,31 +46,32 @@ const Dashboard = () => {
             // Handle different response structures
             if (rolesData.success && rolesData.data && rolesData.data.roles) {
                 extractedRoles = rolesData.data.roles;
-                console.log('📋 Extracted roles (success.data.roles):', extractedRoles);
             } else if (rolesData.roles) {
                 extractedRoles = rolesData.roles;
-                console.log('📋 Extracted roles (direct roles):', extractedRoles);
             } else if (Array.isArray(rolesData)) {
                 extractedRoles = rolesData;
-                console.log('📋 Extracted roles (array):', extractedRoles);
             }
             
             setUserRoles(extractedRoles);
             
             // Check for KETUA RT
-            const hasKetuaRT = extractedRoles.some(role => {
-                const isKetuaRT = role.role_name === 'KETUA RT';
-                console.log(`🏠 Checking role "${role.role_name}" === "KETUA RT": ${isKetuaRT}`);
-                return isKetuaRT;
+            const hasKetuaRT = extractedRoles.some(role => role.role_name === 'KETUA RT');
+            setIsKetuaRT(hasKetuaRT);
+            
+            // Check for KETUA RW
+            const hasKetuaRW = extractedRoles.some(role => {
+                const isKetuaRW = role.role_name === 'KETUA RW';
+                console.log(`🏛️ Checking role "${role.role_name}" === "KETUA RW": ${isKetuaRW}`);
+                return isKetuaRW;
             });
             
-            console.log(`🎯 Final isKetuaRT result: ${hasKetuaRT}`);
-            setIsKetuaRT(hasKetuaRT);
+            console.log(`🎯 Final isKetuaRW result: ${hasKetuaRW}`);
+            setIsKetuaRW(hasKetuaRW);
         }
     }, [rolesData]);
 
     // Get pending RT count jika user adalah Ketua RT
-    const { data: pendingData } = useQuery({
+    const { data: pendingRTData } = useQuery({
         queryKey: ['debug-pending-rt'],
         queryFn: async () => {
             console.log('🔄 Fetching pending RT count...');
@@ -86,10 +89,34 @@ const Dashboard = () => {
     });
 
     useEffect(() => {
-        if (pendingData?.pagination?.total) {
-            setPendingRTCount(pendingData.pagination.total);
+        if (pendingRTData?.pagination?.total) {
+            setPendingRTCount(pendingRTData.pagination.total);
         }
-    }, [pendingData]);
+    }, [pendingRTData]);
+
+    // Get pending RW count jika user adalah Ketua RW
+    const { data: pendingRWData } = useQuery({
+        queryKey: ['debug-pending-rw'],
+        queryFn: async () => {
+            console.log('🔄 Fetching pending RW count...');
+            try {
+                const response = await api.get('/api/surat-pengantar/rw/pending?limit=1');
+                console.log('📊 Pending RW response:', response.data);
+                return response.data;
+            } catch (error) {
+                console.error('❌ Pending RW error:', error);
+                return { pagination: { total: 0 } };
+            }
+        },
+        enabled: isKetuaRW,
+        refetchInterval: 30000
+    });
+
+    useEffect(() => {
+        if (pendingRWData?.pagination?.total) {
+            setPendingRWCount(pendingRWData.pagination.total);
+        }
+    }, [pendingRWData]);
 
     const handleLogout = () => {
         if (window.confirm('Apakah Anda yakin ingin keluar dari sistem?')) {
@@ -99,6 +126,9 @@ const Dashboard = () => {
 
     // Get RT info dari roles
     const rtInfo = userRoles.find(role => role.role_name === 'KETUA RT');
+
+    // Update user info untuk include RW role
+    const rwInfo = userRoles.find(role => role.role_name === 'KETUA RW');
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -127,11 +157,12 @@ const Dashboard = () => {
                         </div>
 
                         <div className="flex items-center space-x-4">
+                        {/* Update notification bell untuk include RW notifications */}
                             <button className="p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-lg transition-colors duration-200 relative">
                                 <Bell className="h-5 w-5" />
-                                {isKetuaRT && pendingRTCount > 0 && (
+                                {((isKetuaRT && pendingRTCount > 0) || (isKetuaRW && pendingRWCount > 0)) && (
                                     <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center font-medium">
-                                        {pendingRTCount > 9 ? '9+' : pendingRTCount}
+                                        {Math.min(99, (pendingRTCount || 0) + (pendingRWCount || 0))}
                                     </span>
                                 )}
                             </button>
@@ -142,19 +173,28 @@ const Dashboard = () => {
                                         {user?.full_name || user?.email || 'User'}
                                     </p>
                                     <div className="text-xs text-gray-500">
+                                        {isKetuaRW && (
+                                            <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs font-medium mr-2">
+                                                Ketua RW {rwInfo?.rw_no || 'N/A'}
+                                            </span>
+                                        )}
                                         {isKetuaRT && (
-                                            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium">
+                                            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs font-medium mr-2">
                                                 Ketua RT {rtInfo?.rt_no || 'N/A'}
                                             </span>
                                         )}
-                                        {!isKetuaRT && <span>{user?.email}</span>}
+                                        {!isKetuaRT && !isKetuaRW && <span>{user?.email}</span>}
                                     </div>
                                 </div>
                                 
                                 <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                                    isKetuaRT ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gradient-to-br from-blue-500 to-purple-600'
+                                    isKetuaRW ? 'bg-gradient-to-br from-purple-500 to-purple-600' :
+                                    isKetuaRT ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 
+                                    'bg-gradient-to-br from-blue-500 to-purple-600'
                                 }`}>
-                                    {isKetuaRT ? (
+                                    {isKetuaRW ? (
+                                        <Shield className="h-4 w-4 text-white" />
+                                    ) : isKetuaRT ? (
                                         <Shield className="h-4 w-4 text-white" />
                                     ) : (
                                         <User className="h-4 w-4 text-white" />
@@ -256,14 +296,39 @@ const Dashboard = () => {
                         </div>
                     )}
 
+                    {/* RW Stats - tampil jika isKetuaRW true */}
+                    {isKetuaRW && (
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 ring-2 ring-purple-200 bg-purple-50">
+                            <div className="flex items-center">
+                                <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                    <Shield className="h-6 w-6 text-purple-600" />
+                                </div>
+                                <div className="ml-4">
+                                    <p className="text-2xl font-bold text-purple-600">{pendingRWCount}</p>
+                                    <p className="text-sm text-gray-500">Menunggu Persetujuan RW</p>
+                                </div>
+                            </div>
+                            {pendingRWCount > 0 && (
+                                <div className="mt-2">
+                                    <div className="flex items-center text-xs text-purple-600">
+                                        <Bell className="h-3 w-3 mr-1" />
+                                        <span>Perlu persetujuan final</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                         <div className="flex items-center">
                             <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
                                 <Settings className="h-6 w-6 text-purple-600" />
                             </div>
                             <div className="ml-4">
-                                <p className="text-2xl font-bold text-gray-900">{isKetuaRT ? 4 : 3}</p>
-                                <p className="text-sm text-gray-500">Menu Aktif</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                                {isKetuaRW ? 5 : isKetuaRT ? 4 : 3}
+                            </p>
+                            <p className="text-sm text-gray-500">Menu Aktif</p>
                             </div>
                         </div>
                     </div>
@@ -315,6 +380,27 @@ const Dashboard = () => {
                                             badge={pendingRTCount > 0 ? pendingRTCount : null}
                                             badgeColor="orange"
                                             className="border-2 border-orange-200 bg-orange-50"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* RW Approval Menu - KONDISIONAL */}
+                                {isKetuaRW && (
+                                    <div className="relative">
+                                        <div className="absolute -top-2 -right-2 z-10">
+                                            <div className="bg-purple-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                                                RW
+                                            </div>
+                                        </div>
+                                        <NavigationCard
+                                            to="/rw/surat-pengantar"
+                                            icon={Shield}
+                                            title="Persetujuan RW"
+                                            description="Kelola persetujuan final surat pengantar"
+                                            color="purple"
+                                            badge={pendingRWCount > 0 ? pendingRWCount : null}
+                                            badgeColor="purple"
+                                            className="border-2 border-purple-200 bg-purple-50"
                                         />
                                     </div>
                                 )}
@@ -387,6 +473,14 @@ const Dashboard = () => {
                                         </span>
                                     </div>
                                 )}
+                                {isKetuaRW && (
+                                    <div className="flex items-center">
+                                        <div className="h-4 w-4 bg-purple-500 rounded-full mr-3"></div>
+                                        <span className="text-sm text-gray-600 font-medium">
+                                            Role: Ketua RW {rwInfo?.rw_no || 'N/A'}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="mt-4 pt-4 border-t border-gray-100">
@@ -447,6 +541,53 @@ const Dashboard = () => {
                             </div>
                         )}
 
+                        {/* RW Management Panel - khusus Ketua RW */}
+                        {isKetuaRW && (
+                            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl shadow-sm p-6 border border-purple-200">
+                                <h3 className="text-lg font-semibold text-purple-900 mb-4 flex items-center">
+                                    <Shield className="h-5 w-5 mr-2" />
+                                    Panel Ketua RW
+                                </h3>
+                                
+                                <div className="space-y-3">
+                                    {pendingRWCount > 0 ? (
+                                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                    <Clock className="h-4 w-4 text-purple-600 mr-2" />
+                                                    <span className="text-sm font-medium text-purple-800">
+                                                        {pendingRWCount} pengajuan menunggu persetujuan final
+                                                    </span>
+                                                </div>
+                                                <a 
+                                                    href="/rw/surat-pengantar" 
+                                                    className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-medium hover:bg-purple-300 transition-colors"
+                                                >
+                                                    Proses →
+                                                </a>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                            <div className="flex items-center">
+                                                <CheckCircle className="h-4 w-4 text-green-600 mr-2" />
+                                                <span className="text-sm text-green-800">
+                                                    Semua pengajuan sudah disetujui
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="text-xs text-purple-700 space-y-1">
+                                        <p>• RW: {rwInfo?.rw_no || 'N/A'}</p>
+                                        <p>• Kelurahan: {rwInfo?.kelurahan_name || 'N/A'}</p>
+                                        <p>• Kecamatan: {rwInfo?.kecamatan_name || 'N/A'}</p>
+                                        <p>• Update: {new Date().toLocaleTimeString('id-ID')}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Recent Activity */}
                         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Aktivitas Terbaru</h3>
@@ -468,6 +609,12 @@ const Dashboard = () => {
                                     <div className="text-sm text-gray-600 bg-blue-50 p-2 rounded-lg">
                                         <p className="font-medium text-blue-800">Role Ketua RT diaktifkan</p>
                                         <p className="text-xs text-blue-600">RT {rtInfo?.rt_no} - Hari ini</p>
+                                    </div>
+                                )}
+                                {isKetuaRW && (
+                                    <div className="text-sm text-gray-600 bg-purple-50 p-2 rounded-lg">
+                                        <p className="font-medium text-purple-800">Role Ketua RW diaktifkan</p>
+                                        <p className="text-xs text-purple-600">RW {rwInfo?.rw_no} - Hari ini</p>
                                     </div>
                                 )}
                             </div>
@@ -495,6 +642,38 @@ const Dashboard = () => {
                                     <button className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                                         <FileText className="h-4 w-4 mr-2" />
                                         Laporan RT
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Quick Actions untuk RW */}
+                        {isKetuaRW && (
+                            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-4">Aksi Cepat RW</h3>
+                                
+                                <div className="space-y-3">
+                                    <a 
+                                        href="/rw/surat-pengantar"
+                                        className="w-full flex items-center justify-center py-2 px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200"
+                                    >
+                                        <Shield className="h-4 w-4 mr-2" />
+                                        Kelola Persetujuan RW
+                                        {pendingRWCount > 0 && (
+                                            <span className="ml-2 bg-purple-800 text-white px-2 py-1 rounded-full text-xs">
+                                                {pendingRWCount}
+                                            </span>
+                                        )}
+                                    </a>
+                                    
+                                    <button className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Laporan RW
+                                    </button>
+                                    
+                                    <button className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                                        <Settings className="h-4 w-4 mr-2" />
+                                        Manajemen RT
                                     </button>
                                 </div>
                             </div>
