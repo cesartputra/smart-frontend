@@ -147,10 +147,42 @@ export const useSuratPengantar = () => {
         });
     }, []);
 
-    // ===== MUTATIONS dengan Enhanced Error Handling =====
+    // ===== MUTATIONS dengan Debouncing dan Request Deduplication =====
     const createRequestMutation = useMutation({
-        mutationFn: suratPengantarService.createRequest,
-        onSuccess: (response) => {
+        mutationFn: async (data) => {
+            // ✅ FIXED: Add request deduplication
+            const requestKey = `create-request-${JSON.stringify(data)}`;
+            
+            // Check if same request is already in progress
+            if (window.pendingRequests && window.pendingRequests[requestKey]) {
+                console.warn('⚠️ Duplicate request prevented:', requestKey);
+                throw new Error('Request already in progress');
+            }
+            
+            // Mark request as pending
+            if (!window.pendingRequests) window.pendingRequests = {};
+            window.pendingRequests[requestKey] = true;
+            
+            console.log('📤 Creating request with data:', data);
+            console.log('🔑 Request key:', requestKey);
+            
+            try {
+                const result = await suratPengantarService.createRequest(data);
+                console.log('✅ Request creation successful:', result);
+                return result;
+            } finally {
+                // Clean up pending request marker
+                delete window.pendingRequests[requestKey];
+            }
+        },
+        // ✅ FIXED: Prevent multiple concurrent mutations
+        onMutate: (variables) => {
+            console.log('🔄 Mutation started with variables:', variables);
+        },
+        onSuccess: (response, variables) => {
+            console.log('✅ Mutation success:', response);
+            console.log('📊 Variables used:', variables);
+            
             // Invalidate and refetch related queries
             queryClient.invalidateQueries([QUERY_KEYS.MY_REQUESTS]);
             queryClient.invalidateQueries([QUERY_KEYS.RT_STATISTICS]);
@@ -160,13 +192,15 @@ export const useSuratPengantar = () => {
             
             // Navigate to detail page if response includes ID
             if (response?.data?.id) {
+                console.log('🔄 Redirecting to:', `/surat-pengantar/${response.data.id}`);
                 setTimeout(() => {
                     window.location.href = `/surat-pengantar/${response.data.id}`;
                 }, 1000);
             }
         },
-        onError: (error) => {
-            console.error('Failed to create request:', error);
+        onError: (error, variables) => {
+            console.error('❌ Mutation error:', error);
+            console.log('📊 Variables used:', variables);
             
             // Handle specific validation errors
             if (error.response?.status === 400) {
@@ -180,6 +214,8 @@ export const useSuratPengantar = () => {
                 }
             } else if (error.response?.status === 403) {
                 toast.error('Anda tidak memiliki akses untuk membuat pengajuan');
+            } else if (error.message === 'Request already in progress') {
+                toast.warn('Permintaan sedang diproses, mohon tunggu...');
             } else {
                 toast.error('Gagal membuat pengajuan. Silakan coba lagi.');
             }
@@ -242,31 +278,62 @@ export const useSuratPengantar = () => {
         }
     });
 
-    // ===== CALLBACK FUNCTIONS =====
+    // ✅ FIXED: Enhanced createRequest dengan debouncing dan validation
     const createRequest = useCallback((data) => {
+        console.log('🚀 createRequest called with:', data);
+        
+        // ✅ FIXED: Check if mutation is already loading
+        if (createRequestMutation.isLoading) {
+            console.warn('⚠️ Request already in progress, ignoring duplicate call');
+            toast.warn('Permintaan sedang diproses, mohon tunggu...');
+            return;
+        }
+        
         // Client-side validation sebelum submit
         if (!data.surat_pengantar_category_id) {
+            console.error('❌ Validation failed: Category not selected');
             toast.error('Kategori surat harus dipilih');
             return;
         }
         
         if (!data.user_ktp_id) {
+            console.error('❌ Validation failed: User not selected');
             toast.error('Pemohon harus dipilih');
             return;
         }
         
         if (!data.reason || data.reason.trim().length < 10) {
+            console.error('❌ Validation failed: Reason too short');
             toast.error('Alasan pengajuan minimal 10 karakter');
             return;
         }
         
         if (data.reason.trim().length > 500) {
+            console.error('❌ Validation failed: Reason too long');
             toast.error('Alasan pengajuan maksimal 500 karakter');
             return;
         }
         
+        console.log('✅ Validation passed, calling mutation');
         createRequestMutation.mutate(data);
     }, [createRequestMutation]);
+
+    // ✅ FIXED: Add a debounced version untuk extreme cases
+    const createRequestDebounced = useMemo(() => {
+        let timeoutId = null;
+        
+        return (data) => {
+            if (timeoutId) {
+                console.log('🔄 Clearing previous debounced call');
+                clearTimeout(timeoutId);
+            }
+            
+            timeoutId = setTimeout(() => {
+                createRequest(data);
+                timeoutId = null;
+            }, 300); // 300ms debounce
+        };
+    }, [createRequest]);
 
     const rtApproval = useCallback((data) => {
         if (!data.id) {

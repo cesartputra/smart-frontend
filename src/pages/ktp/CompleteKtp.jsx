@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -136,6 +136,8 @@ const ktpSchema = yup.object({
         }),
 });
 
+
+
 const CompleteKtp = () => {
     const [mode, setMode] = useState('search');
     const [nikToCheck, setNikToCheck] = useState('');
@@ -164,6 +166,15 @@ const CompleteKtp = () => {
             status_dalam_keluarga: 'ANGGOTA',
         }
     });
+
+    // ✅ FIXED: Memoized location change handler
+    const handleLocationChange = useCallback((locationData) => {
+        console.log('📍 Location data received in CompleteKtp:', locationData);
+        setLocationData(locationData);
+        if (locationData.rt_id) {
+            setValue('rt_id', locationData.rt_id);
+        }
+    }, [setValue]);
 
     const watchedValues = watch();
 
@@ -619,13 +630,17 @@ const CompleteKtp = () => {
                 </div>
 
                 {/* Location Selector */}
-                <LocationSelector
+                {/* <LocationSelector
                     onLocationChange={(locationData) => {
                         setLocationData(locationData);
                         if (locationData.rt_id) {
                             setValue('rt_id', locationData.rt_id);
                         }
                     }}
+                    error={errors.rt_id}
+                /> */}
+                <LocationSelector
+                    onLocationChange={handleLocationChange}  // ✅ Gunakan memoized callback
                     error={errors.rt_id}
                 />
 

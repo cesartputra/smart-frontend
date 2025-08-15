@@ -1,5 +1,5 @@
-// src/components/forms/LocationSelector.jsx - FIXED VERSION
-import { useState, useEffect } from 'react';
+// src/components/forms/LocationSelector.jsx - FIXED INFINITE LOOP VERSION
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import locationService from '../../services/locationService';
 
@@ -11,38 +11,43 @@ const LocationSelector = ({ onLocationChange, error }) => {
     const [selectedRW, setSelectedRW] = useState('');
     const [selectedRT, setSelectedRT] = useState('');
 
+    // ✅ FIXED: Memoized callback to prevent infinite re-renders
+    const handleLocationChange = useCallback((locationData) => {
+        if (onLocationChange && typeof onLocationChange === 'function') {
+            onLocationChange(locationData);
+        }
+    }, [onLocationChange]);
+
     // FIXED: Improved error handling and data processing
     const provincesQuery = useQuery({
         queryKey: ['provinces'],
         queryFn: locationService.getProvinces,
         retry: 3,
         retryDelay: 1000,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
         onError: (error) => {
             console.error('❌ Provinces query error:', error);
-        },
-        onSuccess: (data) => {
-            console.log('✅ Provinces query success:', data);
         }
     });
 
     const citiesQuery = useQuery({
         queryKey: ['cities', selectedProvince],
         queryFn: () => locationService.getCities(selectedProvince),
-        enabled: !!selectedProvince,
+        enabled: !!selectedProvince && selectedProvince !== '',
         retry: 2,
+        staleTime: 5 * 60 * 1000,
         onError: (error) => {
             console.error('❌ Cities query error:', error);
-        },
-        onSuccess: (data) => {
-            console.log('✅ Cities query success:', data);
         }
     });
 
     const kecamatanQuery = useQuery({
         queryKey: ['kecamatan', selectedCity],
         queryFn: () => locationService.getKecamatan(selectedCity),
-        enabled: !!selectedCity,
+        enabled: !!selectedCity && selectedCity !== '',
         retry: 2,
+        staleTime: 5 * 60 * 1000,
         onError: (error) => {
             console.error('❌ Kecamatan query error:', error);
         }
@@ -51,8 +56,9 @@ const LocationSelector = ({ onLocationChange, error }) => {
     const kelurahanQuery = useQuery({
         queryKey: ['kelurahan', selectedKecamatan],
         queryFn: () => locationService.getKelurahan(selectedKecamatan),
-        enabled: !!selectedKecamatan,
+        enabled: !!selectedKecamatan && selectedKecamatan !== '',
         retry: 2,
+        staleTime: 5 * 60 * 1000,
         onError: (error) => {
             console.error('❌ Kelurahan query error:', error);
         }
@@ -61,8 +67,9 @@ const LocationSelector = ({ onLocationChange, error }) => {
     const rwQuery = useQuery({
         queryKey: ['rw', selectedKelurahan],
         queryFn: () => locationService.getRW(selectedKelurahan),
-        enabled: !!selectedKelurahan,
+        enabled: !!selectedKelurahan && selectedKelurahan !== '',
         retry: 2,
+        staleTime: 5 * 60 * 1000,
         onError: (error) => {
             console.error('❌ RW query error:', error);
         }
@@ -71,72 +78,124 @@ const LocationSelector = ({ onLocationChange, error }) => {
     const rtQuery = useQuery({
         queryKey: ['rt', selectedRW],
         queryFn: () => locationService.getRT(selectedRW),
-        enabled: !!selectedRW,
+        enabled: !!selectedRW && selectedRW !== '',
         retry: 2,
+        staleTime: 5 * 60 * 1000,
         onError: (error) => {
             console.error('❌ RT query error:', error);
         }
     });
 
-    // Reset dependent selections when parent changes
+    // ✅ FIXED: Optimized reset effects with proper dependency arrays
     useEffect(() => {
-        setSelectedCity('');
-        setSelectedKecamatan('');
-        setSelectedKelurahan('');
-        setSelectedRW('');
-        setSelectedRT('');
+        if (selectedProvince) {
+            setSelectedCity('');
+            setSelectedKecamatan('');
+            setSelectedKelurahan('');
+            setSelectedRW('');
+            setSelectedRT('');
+        }
     }, [selectedProvince]);
 
     useEffect(() => {
-        setSelectedKecamatan('');
-        setSelectedKelurahan('');
-        setSelectedRW('');
-        setSelectedRT('');
+        if (selectedCity) {
+            setSelectedKecamatan('');
+            setSelectedKelurahan('');
+            setSelectedRW('');
+            setSelectedRT('');
+        }
     }, [selectedCity]);
 
     useEffect(() => {
-        setSelectedKelurahan('');
-        setSelectedRW('');
-        setSelectedRT('');
+        if (selectedKecamatan) {
+            setSelectedKelurahan('');
+            setSelectedRW('');
+            setSelectedRT('');
+        }
     }, [selectedKecamatan]);
 
     useEffect(() => {
-        setSelectedRW('');
-        setSelectedRT('');
+        if (selectedKelurahan) {
+            setSelectedRW('');
+            setSelectedRT('');
+        }
     }, [selectedKelurahan]);
 
     useEffect(() => {
-        setSelectedRT('');
+        if (selectedRW) {
+            setSelectedRT('');
+        }
     }, [selectedRW]);
 
-    // Notify parent component of changes
+    // ✅ FIXED: Only call parent when RT is selected and all required fields are present
     useEffect(() => {
-        if (selectedRT) {
-            onLocationChange({
+        if (selectedRT && selectedProvince && selectedCity && selectedKecamatan && selectedKelurahan && selectedRW) {
+            const locationData = {
                 province_id: parseInt(selectedProvince),
                 city_id: parseInt(selectedCity),
                 kecamatan_id: parseInt(selectedKecamatan),
                 kelurahan_id: parseInt(selectedKelurahan),
                 rw_id: parseInt(selectedRW),
                 rt_id: parseInt(selectedRT),
-            });
+            };
+            
+            console.log('📍 Location data ready:', locationData);
+            handleLocationChange(locationData);
+        } else {
+            // Clear location data when incomplete
+            handleLocationChange({});
         }
-    }, [selectedProvince, selectedCity, selectedKecamatan, selectedKelurahan, selectedRW, selectedRT, onLocationChange]);
+    }, [selectedProvince, selectedCity, selectedKecamatan, selectedKelurahan, selectedRW, selectedRT, handleLocationChange]);
 
     // FIXED: More robust data handling
-    const safeGetData = (queryData, isLoading, isError) => {
-        if (isLoading) return [];
-        if (isError) return [];
-        if (!queryData) return [];
+    const safeGetData = useCallback((queryData, isLoading, isError) => {
+        if (isLoading || isError || !queryData) return [];
         if (Array.isArray(queryData)) return queryData;
         if (queryData.data && Array.isArray(queryData.data)) return queryData.data;
         return [];
-    };
+    }, []);
 
     // FIXED: Better loading state detection
     const isAnyLoading = provincesQuery.isFetching || citiesQuery.isFetching || 
                        kecamatanQuery.isFetching || kelurahanQuery.isFetching || 
                        rwQuery.isFetching || rtQuery.isFetching;
+
+    // ✅ FIXED: Memoized handlers to prevent unnecessary re-renders
+    const handleProvinceChange = useCallback((e) => {
+        const value = e.target.value;
+        console.log('🏛️ Province selected:', value);
+        setSelectedProvince(value);
+    }, []);
+
+    const handleCityChange = useCallback((e) => {
+        const value = e.target.value;
+        console.log('🏙️ City selected:', value);
+        setSelectedCity(value);
+    }, []);
+
+    const handleKecamatanChange = useCallback((e) => {
+        const value = e.target.value;
+        console.log('🏘️ Kecamatan selected:', value);
+        setSelectedKecamatan(value);
+    }, []);
+
+    const handleKelurahanChange = useCallback((e) => {
+        const value = e.target.value;
+        console.log('🏡 Kelurahan selected:', value);
+        setSelectedKelurahan(value);
+    }, []);
+
+    const handleRWChange = useCallback((e) => {
+        const value = e.target.value;
+        console.log('🏠 RW selected:', value);
+        setSelectedRW(value);
+    }, []);
+
+    const handleRTChange = useCallback((e) => {
+        const value = e.target.value;
+        console.log('🏘️ RT selected:', value);
+        setSelectedRT(value);
+    }, []);
 
     return (
         <div className="space-y-4">
@@ -170,7 +229,7 @@ const LocationSelector = ({ onLocationChange, error }) => {
                     </label>
                     <select
                         value={selectedProvince}
-                        onChange={(e) => setSelectedProvince(e.target.value)}
+                        onChange={handleProvinceChange}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         disabled={provincesQuery.isLoading || provincesQuery.isError}
                     >
@@ -194,7 +253,7 @@ const LocationSelector = ({ onLocationChange, error }) => {
                     </label>
                     <select
                         value={selectedCity}
-                        onChange={(e) => setSelectedCity(e.target.value)}
+                        onChange={handleCityChange}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         disabled={!selectedProvince || citiesQuery.isLoading || citiesQuery.isError}
                     >
@@ -222,7 +281,7 @@ const LocationSelector = ({ onLocationChange, error }) => {
                     </label>
                     <select
                         value={selectedKecamatan}
-                        onChange={(e) => setSelectedKecamatan(e.target.value)}
+                        onChange={handleKecamatanChange}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         disabled={!selectedCity || kecamatanQuery.isLoading || kecamatanQuery.isError}
                     >
@@ -247,7 +306,7 @@ const LocationSelector = ({ onLocationChange, error }) => {
                     </label>
                     <select
                         value={selectedKelurahan}
-                        onChange={(e) => setSelectedKelurahan(e.target.value)}
+                        onChange={handleKelurahanChange}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         disabled={!selectedKecamatan || kelurahanQuery.isLoading || kelurahanQuery.isError}
                     >
@@ -275,7 +334,7 @@ const LocationSelector = ({ onLocationChange, error }) => {
                     </label>
                     <select
                         value={selectedRW}
-                        onChange={(e) => setSelectedRW(e.target.value)}
+                        onChange={handleRWChange}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         disabled={!selectedKelurahan || rwQuery.isLoading || rwQuery.isError}
                     >
@@ -300,7 +359,7 @@ const LocationSelector = ({ onLocationChange, error }) => {
                     </label>
                     <select
                         value={selectedRT}
-                        onChange={(e) => setSelectedRT(e.target.value)}
+                        onChange={handleRTChange}
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                             error ? 'border-red-300' : 'border-gray-300'
                         }`}
@@ -334,6 +393,21 @@ const LocationSelector = ({ onLocationChange, error }) => {
                 </div>
             )}
 
+            {/* Progress indicator */}
+            <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center text-sm text-gray-600">
+                    <span className="mr-2">📍</span>
+                    <span>
+                        {selectedProvince && 'Provinsi ✓ '} 
+                        {selectedCity && 'Kota ✓ '}
+                        {selectedKecamatan && 'Kecamatan ✓ '}
+                        {selectedKelurahan && 'Kelurahan ✓ '}
+                        {selectedRW && 'RW ✓ '}
+                        {selectedRT && 'RT ✓'}
+                    </span>
+                </div>
+            </div>
+
             {/* Debug information in development */}
             {process.env.NODE_ENV === 'development' && (
                 <div className="bg-gray-100 p-2 rounded text-xs text-gray-600">
@@ -341,8 +415,22 @@ const LocationSelector = ({ onLocationChange, error }) => {
                         <summary>Debug Info (Development)</summary>
                         <pre className="mt-2 text-xs">
                             {JSON.stringify({
-                                provincesCount: safeGetData(provincesQuery.data, provincesQuery.isLoading, provincesQuery.isError).length,
-                                citiesCount: safeGetData(citiesQuery.data, citiesQuery.isLoading, citiesQuery.isError).length,
+                                selected: {
+                                    province: selectedProvince,
+                                    city: selectedCity,
+                                    kecamatan: selectedKecamatan,
+                                    kelurahan: selectedKelurahan,
+                                    rw: selectedRW,
+                                    rt: selectedRT
+                                },
+                                dataCount: {
+                                    provinces: safeGetData(provincesQuery.data, provincesQuery.isLoading, provincesQuery.isError).length,
+                                    cities: safeGetData(citiesQuery.data, citiesQuery.isLoading, citiesQuery.isError).length,
+                                    kecamatan: safeGetData(kecamatanQuery.data, kecamatanQuery.isLoading, kecamatanQuery.isError).length,
+                                    kelurahan: safeGetData(kelurahanQuery.data, kelurahanQuery.isLoading, kelurahanQuery.isError).length,
+                                    rw: safeGetData(rwQuery.data, rwQuery.isLoading, rwQuery.isError).length,
+                                    rt: safeGetData(rtQuery.data, rtQuery.isLoading, rtQuery.isError).length
+                                },
                                 isLoading: isAnyLoading,
                                 errors: {
                                     provinces: provincesQuery.isError,

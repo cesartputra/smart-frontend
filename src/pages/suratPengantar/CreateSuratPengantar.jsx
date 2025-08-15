@@ -554,14 +554,22 @@ const CreateSuratPengantar = () => {
                             <button
                                 type="submit"
                                 disabled={
-                                    isCreating || 
-                                    !selectedCategory || 
-                                    reasonLength < 10 || 
-                                    !watchedUserKtpId ||
-                                    familyLoading ||
-                                    familyError
+                                    isCreating ||                    // Sedang loading
+                                    !selectedCategory ||             // Kategori belum dipilih
+                                    reasonLength < 10 ||             // Reason terlalu pendek
+                                    !watchedUserKtpId ||            // User belum dipilih
+                                    familyLoading ||                // Family data loading
+                                    familyError                     // Family error
                                 }
                                 className="flex-2 py-3 px-8 bg-gradient-to-r from-green-600 to-blue-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
+                                onClick={(e) => {
+                                    // ✅ FIXED: Prevent multiple clicks
+                                    if (isCreating) {
+                                        e.preventDefault();
+                                        console.warn('⚠️ Button clicked while loading, preventing action');
+                                        return false;
+                                    }
+                                }}
                             >
                                 {isCreating ? (
                                     <>

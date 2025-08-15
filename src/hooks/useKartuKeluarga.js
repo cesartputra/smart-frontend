@@ -52,7 +52,7 @@ export const useKartuKeluarga = () => {
         if (!myFamilyQuery.data?.data) return null;
         
         const data = myFamilyQuery.data.data;
-        const members = data.members || [];
+        const members = data.family_members || [];
         
         // Format members dengan helper functions dari service
         const formattedMembers = members.map(member => 
