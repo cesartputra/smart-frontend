@@ -1,5 +1,7 @@
-// src/App.jsx - UPDATED dengan routes surat pengantar lengkap
+// src/App.jsx - FIXED dengan proper React Router structure
 import { Routes, Route, Navigate } from 'react-router-dom';
+
+// Import semua route components secara langsung
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import VerifyEmail from './pages/auth/VerifyEmail';
@@ -18,6 +20,7 @@ import RWDashboard from './pages/suratPengantar/RWDashboard';
 import AdminSuratPengantarDashboard from './pages/suratPengantar/AdminSuratPengantarDashboard';
 import QRCodeVerification from './pages/suratPengantar/QRCodeVerification';
 
+// Test Page Component
 const TestPage = () => (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
         <div className="max-w-4xl mx-auto text-center">
@@ -100,6 +103,33 @@ const TestPage = () => (
     </div>
 );
 
+// 404 Error Page
+const NotFoundPage = () => (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+            <p className="text-gray-600 mb-6">Halaman yang Anda cari tidak ditemukan</p>
+            <a href="/dashboard" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                Kembali ke Dashboard
+            </a>
+        </div>
+    </div>
+);
+
+// Unauthorized Page
+const UnauthorizedPage = () => (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+            <h1 className="text-4xl font-bold text-red-600 mb-4">🚫</h1>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Akses Ditolak</h2>
+            <p className="text-gray-600 mb-6">Anda tidak memiliki izin untuk mengakses halaman ini</p>
+            <a href="/dashboard" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                Kembali ke Dashboard
+            </a>
+        </div>
+    </div>
+);
+
 function App() {
     return (
         <div className="min-h-screen">
@@ -108,29 +138,21 @@ function App() {
                     PUBLIC ROUTES (No Authentication Required)
                     ======================================== */}
                 
-                {/* Test & Landing Page */}
+                {/* Landing Page */}
                 <Route path="/" element={<TestPage />} />
                 
                 {/* Authentication Routes */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
                 
-                {/* QR Code Verification - Public untuk verifikasi surat */}
+                {/* QR Code Verification - Public */}
                 <Route path="/verify/:token" element={<QRCodeVerification />} />
 
                 {/* ========================================
-                    SEMI-PROTECTED ROUTES
+                    PROFILE COMPLETION ROUTES
                     ======================================== */}
                 
-                {/* Email verification - accessible without full auth */}
-                <Route path="/verify-email" element={<VerifyEmail />} />
-
-                {/* ========================================
-                    BASIC PROTECTED ROUTES
-                    Requires: Authentication + Email Verification
-                    ======================================== */}
-                
-                {/* Profile Completion Routes */}
                 <Route 
                     path="/complete-ktp" 
                     element={
@@ -150,11 +172,9 @@ function App() {
                 />
 
                 {/* ========================================
-                    FULL PROTECTED ROUTES
-                    Requires: Auth + Email + KTP + User Details
+                    MAIN DASHBOARD
                     ======================================== */}
                 
-                {/* Main Dashboard */}
                 <Route 
                     path="/dashboard" 
                     element={
@@ -165,11 +185,9 @@ function App() {
                 />
 
                 {/* ========================================
-                    SURAT PENGANTAR ROUTES - USER LEVEL
-                    Requires: Full Profile (Auth + Email + KTP + User Details)
+                    USER SURAT PENGANTAR ROUTES
                     ======================================== */}
                 
-                {/* User Surat Pengantar Routes */}
                 <Route 
                     path="/surat-pengantar" 
                     element={
@@ -199,7 +217,13 @@ function App() {
 
                 {/* ========================================
                     RT MANAGEMENT ROUTES
-                    Requires: Full Profile + KETUA RT Role
+                    RoleProtectedRoute automatically handles:
+                    - Authentication check (redirect to /login if no token)
+                    - Email verification
+                    - KTP completion  
+                    - User details completion
+                    - Role authorization
+                    - Location requirements
                     ======================================== */}
                 
                 <Route 
@@ -222,7 +246,7 @@ function App() {
 
                 {/* ========================================
                     RW MANAGEMENT ROUTES
-                    Requires: Full Profile + KETUA RW Role
+                    RoleProtectedRoute automatically handles all validations
                     ======================================== */}
                 
                 <Route 
@@ -245,7 +269,7 @@ function App() {
 
                 {/* ========================================
                     ADMIN ROUTES
-                    Requires: Full Profile + ADMIN/SUPER ADMIN Role
+                    RoleProtectedRoute automatically handles all validations
                     ======================================== */}
                 
                 <Route 
@@ -265,50 +289,80 @@ function App() {
                         </RoleProtectedRoute>
                     } 
                 />
-
-                {/* ========================================
-                    MANAGEMENT ROUTES (for future features)
-                    ======================================== */}
                 
-                {/* Role Management - Admin Only */}
                 <Route 
-                    path="/admin/roles" 
+                    path="/admin/surat-pengantar/:id" 
                     element={
-                        <RoleProtectedRoute allowedRoles={['SUPER ADMIN', 'ADMIN']}>
-                            <div>Role Management - Coming Soon</div>
+                        <RoleProtectedRoute allowedRoles={['ADMIN', 'SUPER ADMIN']}>
+                            <SuratPengantarDetail />
                         </RoleProtectedRoute>
                     } 
                 />
 
-                {/* User Management - Admin Only */}
+                {/* ========================================
+                    ADDITIONAL ADMIN ROUTES
+                    ======================================== */}
+                
                 <Route 
                     path="/admin/users" 
                     element={
                         <RoleProtectedRoute allowedRoles={['SUPER ADMIN', 'ADMIN']}>
-                            <div>User Management - Coming Soon</div>
+                            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                                <div className="text-center">
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-4">👥 User Management</h1>
+                                    <p className="text-gray-600">Coming Soon...</p>
+                                </div>
+                            </div>
                         </RoleProtectedRoute>
                     } 
                 />
-
-                {/* Reports & Analytics - Admin/RT/RW */}
+                
                 <Route 
-                    path="/reports" 
+                    path="/admin/roles" 
                     element={
-                        <RoleProtectedRoute allowedRoles={['SUPER ADMIN', 'ADMIN', 'KETUA RT', 'KETUA RW']}>
-                            <div>Reports & Analytics - Coming Soon</div>
+                        <RoleProtectedRoute allowedRoles={['SUPER ADMIN']}>
+                            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                                <div className="text-center">
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-4">🛡️ Role Management</h1>
+                                    <p className="text-gray-600">Super Admin Only - Coming Soon...</p>
+                                </div>
+                            </div>
                         </RoleProtectedRoute>
                     } 
                 />
 
                 {/* ========================================
-                    PROFILE & SETTINGS ROUTES
+                    REPORTS ROUTES (Multi-Role Access)
+                    ======================================== */}
+                
+                <Route 
+                    path="/reports" 
+                    element={
+                        <RoleProtectedRoute allowedRoles={['KETUA RT', 'KETUA RW', 'ADMIN', 'SUPER ADMIN']}>
+                            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                                <div className="text-center">
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-4">📈 Reports & Analytics</h1>
+                                    <p className="text-gray-600">Multi-Role Reports - Coming Soon...</p>
+                                </div>
+                            </div>
+                        </RoleProtectedRoute>
+                    } 
+                />
+
+                {/* ========================================
+                    PROFILE & SETTINGS
                     ======================================== */}
                 
                 <Route 
                     path="/profile" 
                     element={
                         <ProtectedRoute requiresKTP requiresUserDetails>
-                            <div>Profile Management - Coming Soon</div>
+                            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                                <div className="text-center">
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-4">Profile Management</h1>
+                                    <p className="text-gray-600">Coming Soon...</p>
+                                </div>
+                            </div>
                         </ProtectedRoute>
                     } 
                 />
@@ -317,21 +371,12 @@ function App() {
                     path="/settings" 
                     element={
                         <ProtectedRoute requiresKTP requiresUserDetails>
-                            <div>Settings - Coming Soon</div>
-                        </ProtectedRoute>
-                    } 
-                />
-
-                {/* ========================================
-                    REDIRECT ROUTES
-                    ======================================== */}
-                
-                {/* Auto-redirect based on completion status */}
-                <Route 
-                    path="/" 
-                    element={
-                        <ProtectedRoute>
-                            <div>Redirecting...</div>
+                            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                                <div className="text-center">
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-4">Settings</h1>
+                                    <p className="text-gray-600">Coming Soon...</p>
+                                </div>
+                            </div>
                         </ProtectedRoute>
                     } 
                 />
@@ -340,39 +385,9 @@ function App() {
                     ERROR ROUTES
                     ======================================== */}
                 
-                {/* 404 - Catch all unmatched routes */}
-                <Route 
-                    path="/404" 
-                    element={
-                        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                            <div className="text-center">
-                                <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                                <p className="text-gray-600 mb-6">Halaman yang Anda cari tidak ditemukan</p>
-                                <a href="/dashboard" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                    Kembali ke Dashboard
-                                </a>
-                            </div>
-                        </div>
-                    } 
-                />
-
-                {/* Unauthorized Access */}
-                <Route 
-                    path="/unauthorized" 
-                    element={
-                        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                            <div className="text-center">
-                                <h1 className="text-4xl font-bold text-red-600 mb-4">🚫</h1>
-                                <h2 className="text-2xl font-bold text-gray-900 mb-4">Akses Ditolak</h2>
-                                <p className="text-gray-600 mb-6">Anda tidak memiliki izin untuk mengakses halaman ini</p>
-                                <a href="/dashboard" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                    Kembali ke Dashboard
-                                </a>
-                            </div>
-                        </div>
-                    } 
-                />
-
+                <Route path="/404" element={<NotFoundPage />} />
+                <Route path="/unauthorized" element={<UnauthorizedPage />} />
+                
                 {/* Catch all - redirect to 404 */}
                 <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
