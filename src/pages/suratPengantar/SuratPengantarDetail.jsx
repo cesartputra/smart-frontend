@@ -1,6 +1,7 @@
-// src/pages/suratPengantar/SuratPengantarDetail.jsx - REFACTORED VERSION
+// src/pages/suratPengantar/SuratPengantarDetail.jsx - Enhanced dengan auto download
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { 
     ArrowLeft, 
     FileText, 
@@ -223,12 +224,25 @@ const ApprovalNotes = React.memo(({ detail }) => {
     );
 });
 
-// Quick Actions Component
-const QuickActions = React.memo(({ detail, onDownload, isDownloading }) => (
+// Quick Actions Component - Enhanced dengan auto download
+const QuickActions = React.memo(({ detail, onDownload, isDownloading, isAutoDownloading }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
             🚀 Aksi Cepat
         </h3>
+        
+        {/* Auto Download Notification */}
+        {isAutoDownloading && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center text-blue-700">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                    <span className="text-sm font-medium">Download otomatis dari email...</span>
+                </div>
+                <p className="text-xs text-blue-600 mt-1">
+                    File akan otomatis terunduh setelah halaman selesai dimuat
+                </p>
+            </div>
+        )}
         
         <div className="space-y-3">
             {detail.status === 'COMPLETED' && (
@@ -251,6 +265,20 @@ const QuickActions = React.memo(({ detail, onDownload, isDownloading }) => (
                 </button>
             )}
             
+            {detail.status !== 'COMPLETED' && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-center text-yellow-700">
+                        <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span className="text-sm font-medium">
+                            {detail.status === 'SUBMITTED' ? 'Menunggu persetujuan RT' :
+                             detail.status === 'RT_APPROVED' ? 'Menunggu persetujuan RW' :
+                             detail.status === 'REJECTED' ? 'Pengajuan ditolak' :
+                             'Pengajuan belum disubmit'}
+                        </span>
+                    </div>
+                </div>
+            )}
+            
             <Link
                 to="/surat-pengantar/create"
                 className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
@@ -262,7 +290,7 @@ const QuickActions = React.memo(({ detail, onDownload, isDownloading }) => (
     </div>
 ));
 
-// Timeline Component
+// Timeline Component (tetap sama)
 const Timeline = React.memo(({ timelineSteps }) => {
     const formatDate = useCallback((dateString) => {
         if (!dateString) return '-';
@@ -324,7 +352,7 @@ const Timeline = React.memo(({ timelineSteps }) => {
     );
 });
 
-// Document Info Sidebar Component
+// Document Info Sidebar Component (tetap sama)
 const DocumentInfoSidebar = React.memo(({ detail }) => {
     const formatDate = useCallback((dateString) => {
         if (!dateString) return '-';
@@ -454,8 +482,12 @@ const NotFoundState = React.memo(() => (
 // Main Component
 const SuratPengantarDetail = () => {
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
     const { useDetailQuery, downloadPDF } = useSuratPengantar();
     const [isDownloading, setIsDownloading] = useState(false);
+    
+    // Check if should auto download from email link
+    const shouldAutoDownload = searchParams.get('autoDownload') === 'true';
 
     // Enhanced data parsing with multiple structure support
     const detailQuery = useDetailQuery(id);
@@ -466,9 +498,10 @@ const SuratPengantarDetail = () => {
             data: detailQuery.data,
             isLoading: detailQuery.isLoading,
             error: detailQuery.error,
-            id: id
+            id: id,
+            shouldAutoDownload
         });
-    }, [detailQuery.data, detailQuery.isLoading, detailQuery.error, id]);
+    }, [detailQuery.data, detailQuery.isLoading, detailQuery.error, id, shouldAutoDownload]);
 
     // Memoized data parsing with robust structure handling
     const detail = useMemo(() => {
@@ -501,6 +534,41 @@ const SuratPengantarDetail = () => {
         console.warn('Unexpected response structure:', response);
         return null;
     }, [detailQuery.data]);
+
+    // Download handler with proper error handling
+    const handleDownload = useCallback(async () => {
+        if (!id || isDownloading) return;
+        
+        try {
+            setIsDownloading(true);
+            await downloadPDF(id);
+        } catch (error) {
+            console.error('Download failed:', error);
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [id, isDownloading, downloadPDF]);
+
+    // Auto download effect for email links
+    useEffect(() => {
+        if (shouldAutoDownload && detail && detail.status === 'COMPLETED' && !isDownloading) {
+            console.log('🔄 Auto download triggered from email link');
+            
+            // Show toast notification
+            toast.info('Memulai download otomatis dari email...', { duration: 3000 });
+            
+            // Trigger download after short delay
+            const timeoutId = setTimeout(() => {
+                handleDownload();
+            }, 1500);
+            
+            // Clean up URL parameter
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+
+            return () => clearTimeout(timeoutId);
+        }
+    }, [shouldAutoDownload, detail, isDownloading, handleDownload]);
 
     // Memoized timeline steps generation
     const timelineSteps = useMemo(() => {
@@ -535,20 +603,6 @@ const SuratPengantarDetail = () => {
             }
         ];
     }, [detail]);
-
-    // Download handler with proper error handling
-    const handleDownload = useCallback(async () => {
-        if (!id || isDownloading) return;
-        
-        try {
-            setIsDownloading(true);
-            await downloadPDF(id);
-        } catch (error) {
-            console.error('Download failed:', error);
-        } finally {
-            setIsDownloading(false);
-        }
-    }, [id, isDownloading, downloadPDF]);
 
     // Status badge helper with fallback
     const getStatusBadge = useCallback((status) => {
@@ -596,7 +650,7 @@ const SuratPengantarDetail = () => {
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-                {/* Header */}
+                {/* Header dengan Auto Download Banner */}
                 <div className="mb-8">
                     <div className="flex items-center mb-4">
                         <Link
@@ -607,6 +661,23 @@ const SuratPengantarDetail = () => {
                             Kembali ke Daftar Surat
                         </Link>
                     </div>
+
+                    {/* Auto Download Banner */}
+                    {shouldAutoDownload && detail.status === 'COMPLETED' && (
+                        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center">
+                                <Download className="h-5 w-5 text-blue-600 mr-3" />
+                                <div>
+                                    <h4 className="text-sm font-medium text-blue-900">
+                                        Download Otomatis Aktif
+                                    </h4>
+                                    <p className="text-sm text-blue-700">
+                                        File PDF akan otomatis terunduh setelah halaman selesai dimuat
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-8">
@@ -645,7 +716,8 @@ const SuratPengantarDetail = () => {
                         <QuickActions 
                             detail={detail} 
                             onDownload={handleDownload} 
-                            isDownloading={isDownloading} 
+                            isDownloading={isDownloading}
+                            isAutoDownloading={shouldAutoDownload && detail?.status === 'COMPLETED'}
                         />
                         <Timeline timelineSteps={timelineSteps} />
                         <DocumentInfoSidebar detail={detail} />

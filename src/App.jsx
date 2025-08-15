@@ -10,6 +10,7 @@ import CompleteProfile from './pages/profile/CompleteProfile';
 import Dashboard from './pages/Dashboard';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import RoleProtectedRoute from './components/common/RoleProtectedRoute';
+import DownloadRedirect from './components/common/DownloadRedirect';
 
 // Surat Pengantar Components
 import SuratPengantarList from './pages/suratPengantar/SuratPengantarList';
@@ -213,6 +214,15 @@ function App() {
                             <SuratPengantarDetail />
                         </ProtectedRoute>
                     } 
+                />
+
+                {/* ========================================
+                    DOWNLOAD REDIRECT ROUTE
+                    Handle download links from email with auth check
+                    ======================================== */}
+                <Route 
+                    path="/surat-pengantar/:id/download" 
+                    element={<DownloadRedirect />} 
                 />
 
                 {/* ========================================
