@@ -1,4 +1,5 @@
-// src/App.jsx - FIXED dengan proper React Router structure
+// src/App.jsx - FIXED: Add proper QR verification route
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Import semua route components secara langsung
@@ -147,7 +148,7 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 
-                {/* QR Code Verification - Public */}
+                {/* ✅ FIXED: QR Code Verification - Public route dengan URL yang benar */}
                 <Route path="/verify/:token" element={<QRCodeVerification />} />
 
                 {/* ========================================

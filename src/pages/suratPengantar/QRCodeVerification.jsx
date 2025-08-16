@@ -1,4 +1,4 @@
-// src/pages/suratPengantar/QRCodeVerification.jsx
+// src/pages/suratPengantar/QRCodeVerification.jsx - FIXED: Use frontend API call
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
@@ -14,15 +14,12 @@ import {
     Download,
     Loader
 } from 'lucide-react';
-import { useSuratPengantar } from '../../hooks/useSuratPengantar';
 
 const QRCodeVerification = () => {
     const { token } = useParams();
     const [verificationResult, setVerificationResult] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    const { verifyQR, isVerifying } = useSuratPengantar();
 
     useEffect(() => {
         if (token) {
@@ -38,8 +35,15 @@ const QRCodeVerification = () => {
             setLoading(true);
             setError(null);
             
-            // Call verification service
-            const result = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/verify-surat/${token}`, {
+            console.log('🔍 Verifying base64 token from frontend:', token);
+            
+            // ✅ ALTERNATIVE: Langsung gunakan token (sudah base64, URL-safe)
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+            const apiUrl = `${baseUrl}/api/surat-pengantar/verify-frontend/${token}`;
+            
+            console.log('🔗 Making API call to verify endpoint');
+            
+            const result = await fetch(apiUrl, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -47,15 +51,18 @@ const QRCodeVerification = () => {
             });
             
             const data = await result.json();
+            console.log('📥 API Response:', data);
             
             if (result.ok && data.success) {
+                console.log('✅ Verification successful');
                 setVerificationResult(data);
             } else {
-                setError(data.message || 'QR Code tidak valid');
+                console.error('❌ Verification failed:', data.message);
+                setError(data.message || 'QR Code tidak valid atau sudah kadaluarsa');
             }
         } catch (err) {
-            console.error('Verification error:', err);
-            setError('Gagal melakukan verifikasi. Silakan coba lagi.');
+            console.error('❌ Verification error:', err);
+            setError('Gagal melakukan verifikasi. Periksa koneksi internet dan coba lagi.');
         } finally {
             setLoading(false);
         }
@@ -72,7 +79,7 @@ const QRCodeVerification = () => {
         });
     };
 
-    if (loading || isVerifying) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
@@ -118,8 +125,8 @@ const QRCodeVerification = () => {
         );
     }
 
-    if (verificationResult?.success) {
-        const data = verificationResult.data;
+    if (verificationResult?.success && verificationResult?.data) {
+        const data = verificationResult.data.data;
         
         return (
             <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
@@ -186,6 +193,13 @@ const QRCodeVerification = () => {
                                             </label>
                                             <p className="text-gray-900 font-mono">{data.nik}</p>
                                         </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-500 mb-1">
+                                                Alamat
+                                            </label>
+                                            <p className="text-gray-900">{data.address}</p>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -213,7 +227,32 @@ const QRCodeVerification = () => {
                                             </label>
                                             <p className="text-gray-900">{data.kelurahan_name}</p>
                                         </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-500 mb-1">
+                                                Kecamatan
+                                            </label>
+                                            <p className="text-gray-900">{data.kecamatan_name}</p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-500 mb-1">
+                                                Kota
+                                            </label>
+                                            <p className="text-gray-900">{data.city_name}</p>
+                                        </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Keperluan */}
+                            <div className="mt-8 border-t border-gray-200 pt-8">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                    <FileText className="h-5 w-5 mr-2 text-purple-600" />
+                                    Keperluan Surat
+                                </h3>
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <p className="text-gray-800">{data.reason}</p>
                                 </div>
                             </div>
 
@@ -252,6 +291,20 @@ const QRCodeVerification = () => {
                                             </p>
                                         </div>
                                     </div>
+
+                                    <div className="flex items-center">
+                                        <div className="h-8 w-8 bg-gray-100 rounded-full flex items-center justify-center mr-4">
+                                            <FileText className="h-4 w-4 text-gray-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">
+                                                Diajukan pada: {formatDate(data.submitted_at)}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                                Pengajuan surat pengantar dibuat
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -268,8 +321,11 @@ const QRCodeVerification = () => {
                                             <h4 className="font-medium text-blue-900 mb-1">
                                                 Disetujui RT
                                             </h4>
-                                            <p className="text-sm text-blue-800">
+                                            <p className="text-sm text-blue-800 mb-1">
                                                 {data.rt_approver_name}
+                                            </p>
+                                            <p className="text-xs text-blue-600">
+                                                {formatDate(data.rt_approved_at)}
                                             </p>
                                         </div>
                                     )}
@@ -279,8 +335,11 @@ const QRCodeVerification = () => {
                                             <h4 className="font-medium text-green-900 mb-1">
                                                 Disetujui RW
                                             </h4>
-                                            <p className="text-sm text-green-800">
+                                            <p className="text-sm text-green-800 mb-1">
                                                 {data.rw_approver_name}
+                                            </p>
+                                            <p className="text-xs text-green-600">
+                                                {formatDate(data.rw_approved_at)}
                                             </p>
                                         </div>
                                     )}

@@ -484,6 +484,9 @@ const suratPengantarService = {
     },
 
     // QR Code verification (public)
+    // src/services/suratPengantarService.js - UPDATE method verifyQRCode
+
+    // QR Code verification (public)
     verifyQRCode: async (token) => {
         console.log('🔧 suratPengantarService.verifyQRCode called with token:', token);
         
@@ -492,8 +495,8 @@ const suratPengantarService = {
         }
         
         try {
-            // Use direct fetch for public endpoint without auth headers
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/verify-surat/${token}`, {
+            // ✅ FIX: Gunakan endpoint yang benar
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/surat-pengantar/verify-surat/${token}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
