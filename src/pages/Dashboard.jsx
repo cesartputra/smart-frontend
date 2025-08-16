@@ -363,6 +363,15 @@ const Dashboard = () => {
                                     color="green"
                                 />
 
+                                {/* // Tambahkan di bagian grid menu utama, setelah Surat Pengantar Menu */}
+                                <NavigationCard
+                                    to="/kartu-keluarga"
+                                    icon={User}
+                                    title="Kartu Keluarga"
+                                    description="Kelola data anggota keluarga"
+                                    color="purple"
+                                />
+
                                 {/* RT Approval Menu - KONDISIONAL */}
                                 {isKetuaRT && (
                                     <div className="relative">
