@@ -83,7 +83,7 @@ const KartuKeluarga = () => {
     }
 
     // No family data
-    if (!familyData || !familyData.kartu_keluarga) {
+    if (!familyData || !familyData.kk) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center max-w-md mx-auto p-6">
@@ -98,7 +98,7 @@ const KartuKeluarga = () => {
         );
     }
 
-    const { kartu_keluarga: kk, anggota_keluarga: members = [] } = familyData;
+    const { kk, members } = familyData;
 
     return (
         <div className="min-h-screen bg-gray-50">
