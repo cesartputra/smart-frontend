@@ -1,11 +1,11 @@
-// src/hooks/useKTP.js - Update completion tracking
+// src/hooks/useUserKTP.js - Update completion tracking
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import ktpService from '../services/ktpService';
+import ktpService from '../services/userKtpService';
 import useAuthStore from '../store/authStore';
 
-export const useKtp = () => {
+export const useUserKtp = () => {
     const navigate = useNavigate();
     const { updateUser, getNextRequiredStep } = useAuthStore();
 

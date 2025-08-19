@@ -23,11 +23,13 @@ import DeleteConfirmModal from '../../components/common/DeleteConfirmModal';
 const KartuKeluarga = () => {
     const { 
         familyData, 
-        isFamilyLoading, 
+        familyLoading: isFamilyLoading, 
         familyError,
         deleteFamilyMember,
         isDeletingMember,
-        canDeleteMember 
+        canDeleteMember,
+        addFamilyMember,
+        updateFamilyMember
     } = useKartuKeluarga();
 
     const [showAddModal, setShowAddModal] = useState(false);

@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-hot-toast';
-import { useKtp } from '../../hooks/useKtp';
+import { useUserKtp } from '../../hooks/useUserKtp';
 import { Search, UserCheck, Users, AlertCircle, CheckCircle } from 'lucide-react';
 import LocationSelector from '../../components/forms/LocationSelector';
 import ClaimableKTPCard from '../../components/ktp/ClaimableKTPCard';
@@ -150,7 +150,7 @@ const CompleteKtp = () => {
         checkNikResult,
         isLoading, 
         isCheckingNik 
-    } = useKtp();
+    } = useUserKtp();
 
     const {
         register,
