@@ -30,9 +30,6 @@ const schema = yup.object({
     hubungan_keluarga: yup
         .string()
         .required('Hubungan keluarga wajib dipilih'),
-    education: yup
-        .string()
-        .required('Pendidikan wajib dipilih'),
     occupation: yup
         .string()
         .required('Pekerjaan wajib diisi'),
@@ -42,11 +39,7 @@ const schema = yup.object({
     address: yup
         .string()
         .min(10, 'Alamat minimal 10 karakter')
-        .required('Alamat wajib diisi'),
-    phone: yup
-        .string()
-        .matches(/^(\+62|62|0)8[1-9][0-9]{6,9}$/, 'Format nomor HP tidak valid')
-        .nullable()
+        .required('Alamat wajib diisi')
 });
 
 const EditFamilyMemberModal = ({ member, onClose }) => {
@@ -67,11 +60,11 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
             sex: member?.sex || '',
             religion: member?.religion || '',
             hubungan_keluarga: member?.hubungan_keluarga || '',
-            education: member?.education || '',
             occupation: member?.occupation || '',
             marital_status: member?.marital_status || '',
             address: member?.address || '',
-            phone: member?.phone || ''
+            status_tinggal: member?.status_tinggal || '',
+            blood_type: member?.blood_type || ''
         }
     });
 
@@ -85,24 +78,26 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
                 sex: member.sex || '',
                 religion: member.religion || '',
                 hubungan_keluarga: member.hubungan_keluarga || '',
-                education: member.education || '',
                 occupation: member.occupation || '',
                 marital_status: member.marital_status || '',
                 address: member.address || '',
-                phone: member.phone || ''
             });
         }
     }, [member, reset]);
 
     const onSubmit = async (data) => {
         try {
-            // Format data sesuai dengan yang diharapkan backend
+            // Format data sesuai dengan yang diharapkan backend userKtpRoutes
             const formattedData = {
-                ...data,
-                // Convert date to ISO string
+                full_name: data.full_name,
+                pob: data.pob,
                 dob: new Date(data.dob).toISOString().split('T')[0],
-                // Remove empty phone
-                phone: data.phone || null
+                sex: data.sex,
+                religion: data.religion,
+                hubungan_keluarga: data.hubungan_keluarga,
+                occupation: data.occupation,
+                marital_status: data.marital_status,
+                address: data.address,
             };
 
             await updateFamilyMember({ 
@@ -120,18 +115,20 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
     ];
 
     const hubunganKeluargaOptions = [
-        'Kepala Keluarga', 'Istri', 'Anak', 'Menantu', 'Cucu', 
-        'Orang Tua', 'Mertua', 'Famili Lain', 'Pembantu', 'Lainnya'
-    ];
-
-    const educationOptions = [
-        'Tidak/Belum Sekolah', 'Belum Tamat SD/Sederajat', 'Tamat SD/Sederajat',
-        'SLTP/Sederajat', 'SLTA/Sederajat', 'Diploma I/II', 'Akademi/Diploma III/S. Muda',
-        'Diploma IV/Strata I', 'Strata II', 'Strata III'
+        'KEPALA KELUARGA', 'SUAMI', 'ISTRI', 'ANAK', 'MENANTU', 
+        'CUCU', 'ORANG TUA', 'MERTUA', 'FAMILI LAIN', 'PEMBANTU', 'LAINNYA'
     ];
 
     const maritalStatusOptions = [
-        'Belum Kawin', 'Kawin', 'Cerai Hidup', 'Cerai Mati'
+        'BELUM KAWIN', 'KAWIN', 'CERAI HIDUP', 'CERAI MATI'
+    ];
+
+    const statusTinggalOptions = [
+        'TETAP', 'SEMENTARA', 'KONTRAK'
+    ];
+
+    const bloodTypeOptions = [
+        'A', 'B', 'AB', 'O'
     ];
 
     if (!member) return null;
@@ -343,26 +340,6 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
 
                             {showAdvanced && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Education */}
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Pendidikan <span className="text-red-500">*</span>
-                                        </label>
-                                        <select
-                                            {...register('education')}
-                                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                                                errors.education ? 'border-red-300' : 'border-gray-300'
-                                            }`}
-                                        >
-                                            <option value="">Pilih Pendidikan</option>
-                                            {educationOptions.map(education => (
-                                                <option key={education} value={education}>{education}</option>
-                                            ))}
-                                        </select>
-                                        {errors.education && (
-                                            <p className="mt-1 text-sm text-red-600">{errors.education.message}</p>
-                                        )}
-                                    </div>
 
                                     {/* Marital Status */}
                                     <div>
@@ -385,6 +362,48 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
                                         )}
                                     </div>
 
+                                    {/* Status Tinggal */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Status Tinggal <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            {...register('status_tinggal')}
+                                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                                errors.status_tinggal ? 'border-red-300' : 'border-gray-300'
+                                            }`}
+                                        >
+                                            <option value="">Pilih Status</option>
+                                            {statusTinggalOptions.map(status => (
+                                                <option key={status} value={status}>{status}</option>
+                                            ))}
+                                        </select>
+                                        {errors.status_tinggal && (
+                                            <p className="mt-1 text-sm text-red-600">{errors.status_tinggal.message}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Blood Type */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Golongan Darah <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            {...register('blood_type')}
+                                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                                errors.blood_type ? 'border-red-300' : 'border-gray-300'
+                                            }`}
+                                        >
+                                            <option value="">Pilih Status</option>
+                                            {bloodTypeOptions.map(type => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
+                                        {errors.blood_type && (
+                                            <p className="mt-1 text-sm text-red-600">{errors.blood_type.message}</p>
+                                        )}
+                                    </div>
+
                                     {/* Occupation */}
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -403,24 +422,6 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
                                         )}
                                     </div>
 
-                                    {/* Phone */}
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Nomor HP (Opsional)
-                                        </label>
-                                        <input
-                                            {...register('phone')}
-                                            type="tel"
-                                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                                                errors.phone ? 'border-red-300' : 'border-gray-300'
-                                            }`}
-                                            placeholder="08123456789"
-                                        />
-                                        {errors.phone && (
-                                            <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
-                                        )}
-                                    </div>
-
                                     {/* Address */}
                                     <div className="md:col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -429,6 +430,7 @@ const EditFamilyMemberModal = ({ member, onClose }) => {
                                         <textarea
                                             {...register('address')}
                                             rows="3"
+                                            disabled
                                             className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
                                                 errors.address ? 'border-red-300' : 'border-gray-300'
                                             }`}

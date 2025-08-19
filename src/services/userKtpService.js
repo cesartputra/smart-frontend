@@ -1,73 +1,95 @@
-// src/services/ktpService.js
+// src/services/userKtpService.js
 import api from './api';
 
-const ktpService = {
-    // Create/Claim KTP
-    createKTP: async (data) => {
-        console.log('KTPService.createKTP called with:', data);
-        try {
-        const response = await api.post('/api/user-ktp', data);
-        console.log('CreateKTP response:', response.data);
-        return response.data;
-        } catch (error) {
-        console.error('KTPService.createKTP error:', error);
-        throw error;
-        }
-    },
-
-    // Get user's KTP
+const userKtpService = {
+    /**
+     * Get current user's KTP data
+     * Endpoint: GET /api/user-ktp
+     * Requires: Verified User (Auth + Email + Active)
+     */
     getKTP: async () => {
+        console.log('UserKtpService.getKTP called');
         try {
-        const response = await api.get('/api/user-ktp');
-        return response.data;
+            const response = await api.get('/api/user-ktp');
+            console.log('GetKTP response:', response.data);
+            return response.data;
         } catch (error) {
-        console.error('KTPService.getKTP error:', error);
-        throw error;
+            console.error('UserKtpService.getKTP error:', error);
+            throw error;
         }
     },
-
-    // Check NIK claimability
-    checkNikClaimability: async (nik) => {
-        try {
-        const response = await api.get(`/api/user-ktp/check-claim/${nik}`);
-        return response.data;
-        } catch (error) {
-        console.error('KTPService.checkNikClaimability error:', error);
-        throw error;
-        }
-    },
-
-    // Update KTP
-    updateKTP: async (data) => {
-        try {
-        const response = await api.patch('/api/user-ktp', data);
-        return response.data;
-        } catch (error) {
-        console.error('KTPService.updateKTP error:', error);
-        throw error;
-        }
-    },
-
-    // Get unclaimed family members
-    getUnclaimedMembers: async () => {
-        try {
-        const response = await api.get('/api/user-ktp/unclaimed-members');
-        return response.data;
-        } catch (error) {
-        console.error('KTPService.getUnclaimedMembers error:', error);
-        throw error;
-        }
-    },
-
-    // Tambahkan fungsi-fungsi ini di kartuKeluargaService object
 
     /**
-     * Add new family member
-     * Endpoint: POST /api/user-ktp/family-member
-     * Requires: Complete User (Auth + Email + KTP)
+     * Create/Claim KTP data
+     * Endpoint: POST /api/user-ktp
+     * Requires: Verified User
+     * Supports both new registration and claiming existing data
      */
-    addFamilyMember: async (memberData) => {
-        console.log('KartuKeluargaService.addFamilyMember called with:', memberData);
+    createKTP: async (ktpData) => {
+        console.log('UserKtpService.createKTP called with:', ktpData);
+        
+        if (!ktpData || !ktpData.nik) {
+            throw new Error('NIK wajib diisi');
+        }
+        
+        try {
+            const response = await api.post('/api/user-ktp', ktpData);
+            console.log('CreateKTP response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('UserKtpService.createKTP error:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data?.message;
+                if (errorMessage?.includes('NIK already registered')) {
+                    throw new Error('NIK sudah terdaftar oleh pengguna lain');
+                }
+                if (errorMessage?.includes('invalid format')) {
+                    throw new Error('Format NIK tidak valid');
+                }
+                throw new Error(errorMessage || 'Data KTP tidak valid');
+            }
+            
+            throw error;
+        }
+    },
+
+    /**
+     * Update KTP data
+     * Endpoint: PATCH /api/user-ktp
+     * Requires: Complete User (Auth + Email + Active + KTP)
+     */
+    updateKTP: async (updateData) => {
+        console.log('UserKtpService.updateKTP called with:', updateData);
+        
+        if (!updateData) {
+            throw new Error('Data update wajib diisi');
+        }
+        
+        try {
+            const response = await api.patch('/api/user-ktp', updateData);
+            console.log('UpdateKTP response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('UserKtpService.updateKTP error:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data?.message;
+                throw new Error(errorMessage || 'Data yang dimasukkan tidak valid');
+            }
+            
+            throw error;
+        }
+    },
+
+    /**
+     * Register new family member
+     * Endpoint: POST /api/user-ktp/family-member
+     * Requires: Complete User
+     * All fields required (strict validation)
+     */
+    registerFamilyMember: async (memberData) => {
+        console.log('UserKtpService.registerFamilyMember called with:', memberData);
         
         if (!memberData) {
             throw new Error('Data anggota keluarga wajib diisi');
@@ -75,17 +97,17 @@ const ktpService = {
         
         try {
             const response = await api.post('/api/user-ktp/family-member', memberData);
-            console.log('AddFamilyMember response:', response.data);
+            console.log('RegisterFamilyMember response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('KartuKeluargaService.addFamilyMember error:', error);
+            console.error('UserKtpService.registerFamilyMember error:', error);
             
             if (error.response?.status === 400) {
                 const errorMessage = error.response.data?.message;
                 if (errorMessage?.includes('NIK already exists')) {
                     throw new Error('NIK sudah terdaftar dalam sistem');
                 }
-                if (errorMessage?.includes('invalid')) {
+                if (errorMessage?.includes('invalid data')) {
                     throw new Error('Data yang dimasukkan tidak valid');
                 }
                 throw new Error(errorMessage || 'Data tidak valid');
@@ -100,24 +122,48 @@ const ktpService = {
     },
 
     /**
-     * Update family member - NOT AVAILABLE in backend routes
-     * Consider using separate update endpoint or modify backend
+     * Update family member data
+     * Endpoint: PUT /api/user-ktp/family-member/:ktpId (assuming this exists)
+     * Requires: Complete User
      */
     updateFamilyMember: async (ktpId, updateData) => {
-        console.log('KartuKeluargaService.updateFamilyMember called with:', { ktpId, updateData });
+        console.log('UserKtpService.updateFamilyMember called with:', { ktpId, updateData });
         
-        // Backend doesn't have update endpoint for family members
-        // You might need to add this endpoint in backend or handle differently
-        throw new Error('Update family member functionality not implemented in backend');
+        if (!ktpId || !updateData) {
+            throw new Error('ID dan data anggota keluarga wajib diisi');
+        }
+        
+        try {
+            const response = await api.patch(`/api/user-ktp/family-member/${ktpId}`, updateData);
+            console.log('UpdateFamilyMember response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('UserKtpService.updateFamilyMember error:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data?.message;
+                throw new Error(errorMessage || 'Data yang dimasukkan tidak valid');
+            }
+            
+            if (error.response?.status === 403) {
+                throw new Error('Anda tidak memiliki izin untuk mengubah data anggota ini');
+            }
+            
+            if (error.response?.status === 404) {
+                throw new Error('Anggota keluarga tidak ditemukan');
+            }
+            
+            throw error;
+        }
     },
 
     /**
      * Delete family member
      * Endpoint: DELETE /api/user-ktp/family-member/:ktpId
-     * Requires: Complete User (Auth + Email + KTP)
+     * Requires: Complete User
      */
     deleteFamilyMember: async (ktpId) => {
-        console.log('KartuKeluargaService.deleteFamilyMember called with ktpId:', ktpId);
+        console.log('UserKtpService.deleteFamilyMember called with ktpId:', ktpId);
         
         if (!ktpId) {
             throw new Error('ID anggota keluarga wajib diisi');
@@ -128,15 +174,12 @@ const ktpService = {
             console.log('DeleteFamilyMember response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('KartuKeluargaService.deleteFamilyMember error:', error);
+            console.error('UserKtpService.deleteFamilyMember error:', error);
             
             if (error.response?.status === 400) {
                 const errorMessage = error.response.data?.message;
-                if (errorMessage?.includes('cannot delete head')) {
-                    throw new Error('Kepala keluarga tidak dapat dihapus');
-                }
-                if (errorMessage?.includes('has user account')) {
-                    throw new Error('Anggota yang sudah memiliki akun tidak dapat dihapus');
+                if (errorMessage?.includes('cannot delete')) {
+                    throw new Error('Anggota ini tidak dapat dihapus');
                 }
                 throw new Error(errorMessage || 'Tidak dapat menghapus anggota keluarga');
             }
@@ -154,19 +197,40 @@ const ktpService = {
     },
 
     /**
+     * Check delete permission for family member
+     * Endpoint: GET /api/user-ktp/family-member/:ktpId/delete-permission
+     * Requires: Complete User
+     */
+    checkDeletePermission: async (ktpId) => {
+        console.log('UserKtpService.checkDeletePermission called with ktpId:', ktpId);
+        
+        if (!ktpId) {
+            throw new Error('ID anggota keluarga wajib diisi');
+        }
+        
+        try {
+            const response = await api.get(`/api/user-ktp/family-member/${ktpId}/delete-permission`);
+            console.log('CheckDeletePermission response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('UserKtpService.checkDeletePermission error:', error);
+            throw error;
+        }
+    },
+
+    /**
      * Get unclaimed family members
      * Endpoint: GET /api/user-ktp/unclaimed-members
      * Requires: Complete User
      */
     getUnclaimedFamilyMembers: async () => {
-        console.log('KartuKeluargaService.getUnclaimedFamilyMembers called');
-        
+        console.log('UserKtpService.getUnclaimedFamilyMembers called');
         try {
             const response = await api.get('/api/user-ktp/unclaimed-members');
             console.log('GetUnclaimedFamilyMembers response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('KartuKeluargaService.getUnclaimedFamilyMembers error:', error);
+            console.error('UserKtpService.getUnclaimedFamilyMembers error:', error);
             throw error;
         }
     },
@@ -177,14 +241,13 @@ const ktpService = {
      * Requires: Complete User
      */
     getRegisteredFamilyMembers: async () => {
-        console.log('KartuKeluargaService.getRegisteredFamilyMembers called');
-        
+        console.log('UserKtpService.getRegisteredFamilyMembers called');
         try {
             const response = await api.get('/api/user-ktp/registered-members');
             console.log('GetRegisteredFamilyMembers response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('KartuKeluargaService.getRegisteredFamilyMembers error:', error);
+            console.error('UserKtpService.getRegisteredFamilyMembers error:', error);
             throw error;
         }
     },
@@ -195,43 +258,31 @@ const ktpService = {
      * Requires: Verified User
      */
     checkNikClaimability: async (nik) => {
-        console.log('KartuKeluargaService.checkNikClaimability called with nik:', nik);
+        console.log('UserKtpService.checkNikClaimability called with nik:', nik);
         
         if (!nik) {
             throw new Error('NIK wajib diisi');
         }
         
+        // Validate NIK format
+        if (!/^\d{16}$/.test(nik)) {
+            throw new Error('NIK harus 16 digit angka');
+        }
+        
         try {
-            const response = await api.get(`/api/user-ktp/check-claim/${nik}`);
+            const response = await api.get(`/api/user-ktp/check-claim/${nik.trim()}`);
             console.log('CheckNikClaimability response:', response.data);
             return response.data;
         } catch (error) {
-            console.error('KartuKeluargaService.checkNikClaimability error:', error);
+            console.error('UserKtpService.checkNikClaimability error:', error);
+            
+            if (error.response?.status === 400) {
+                throw new Error('Format NIK tidak valid');
+            }
+            
             throw error;
         }
-    },
-
-    /**
-     * Check delete permission
-     * Endpoint: GET /api/user-ktp/family-member/:ktpId/delete-permission
-     * Requires: Complete User
-     */
-    checkDeletePermission: async (ktpId) => {
-        console.log('KartuKeluargaService.checkDeletePermission called with ktpId:', ktpId);
-        
-        if (!ktpId) {
-            throw new Error('KTP ID wajib diisi');
-        }
-        
-        try {
-            const response = await api.get(`/api/user-ktp/family-member/${ktpId}/delete-permission`);
-            console.log('CheckDeletePermission response:', response.data);
-            return response.data;
-        } catch (error) {
-            console.error('KartuKeluargaService.checkDeletePermission error:', error);
-            throw error;
-        }
-    },
+    }
 };
 
-export default ktpService;
+export default userKtpService;

@@ -3,6 +3,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import kartuKeluargaService from '../services/kartuKeluargaService';
+import userKtpService from '../services/userKtpService';
 
 // Query keys untuk konsistensi dan invalidation
 export const KARTU_KELUARGA_QUERY_KEYS = {
@@ -236,34 +237,227 @@ export const useKartuKeluarga = () => {
         };
     }, [familyData]);
 
-    // ===== RETURN OBJECT =====
-    return {
-        // Family data
-        familyData,
-        familyStats,
-        familyLoading: myFamilyQuery.isLoading,
-        familyError: myFamilyQuery.error,
-        refreshMyFamily,
+    // Delete Family Member Mutation
+    const deleteFamilyMemberMutation = useMutation({
+        mutationFn: (ktpId) => userKtpService.deleteFamilyMember(ktpId),
+        onSuccess: (response, ktpId) => {
+            toast.success('Anggota keluarga berhasil dihapus');
+            
+            // Invalidate family data to refresh the list
+            queryClient.invalidateQueries([KARTU_KELUARGA_QUERY_KEYS.MY_FAMILY]);
+        },
+        onError: (error) => {
+            console.error('Delete family member failed:', error);
+            
+            if (error.response?.status === 403) {
+                toast.error('Anda tidak memiliki izin untuk menghapus anggota ini');
+            } else if (error.response?.status === 404) {
+                toast.error('Anggota keluarga tidak ditemukan');
+            } else if (error.response?.status === 400) {
+                const errorMessage = error.response.data?.message;
+                if (errorMessage?.includes('cannot delete')) {
+                    toast.error('Anggota ini tidak dapat dihapus');
+                } else {
+                    toast.error(errorMessage || 'Tidak dapat menghapus anggota keluarga');
+                }
+            } else {
+                toast.error('Gagal menghapus anggota keluarga');
+            }
+        }
+    });
 
-        // Mutations
-        validateKK,
-        isValidatingKK: validateKKMutation.isLoading,
-        validateKKError: validateKKMutation.error,
+    // Add Family Member Mutation
+    const addFamilyMemberMutation = useMutation({
+        mutationFn: (memberData) => userKtpService.registerFamilyMember(memberData),
+        onSuccess: (response) => {
+            toast.success('Anggota keluarga berhasil ditambahkan');
+            
+            // Invalidate family data to refresh the list
+            queryClient.invalidateQueries([KARTU_KELUARGA_QUERY_KEYS.MY_FAMILY]);
+        },
+        onError: (error) => {
+            console.error('Add family member failed:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data?.message;
+                if (errorMessage?.includes('NIK already exists')) {
+                    toast.error('NIK sudah terdaftar dalam sistem');
+                } else if (errorMessage?.includes('invalid data')) {
+                    toast.error('Data yang dimasukkan tidak valid');
+                } else {
+                    toast.error(errorMessage || 'Data tidak valid');
+                }
+            } else if (error.response?.status === 403) {
+                toast.error('Anda tidak memiliki izin untuk menambah anggota');
+            } else {
+                toast.error('Gagal menambahkan anggota keluarga');
+            }
+        }
+    });
 
-        // Query hooks for components
-        useKKDetails,
-        useKKStatistics,
-        useKKAvailability,
+    // Update Family Member Mutation
+    const updateFamilyMemberMutation = useMutation({
+        mutationFn: ({ ktpId, updateData }) => userKtpService.updateFamilyMember(ktpId, updateData),
+        onSuccess: (response) => {
+            toast.success('Data anggota keluarga berhasil diperbarui');
+            
+            // Invalidate family data to refresh the list
+            queryClient.invalidateQueries([KARTU_KELUARGA_QUERY_KEYS.MY_FAMILY]);
+        },
+        onError: (error) => {
+            console.error('Update family member failed:', error);
+            
+            if (error.response?.status === 400) {
+                const errorMessage = error.response.data?.message;
+                toast.error(errorMessage || 'Data yang dimasukkan tidak valid');
+            } else if (error.response?.status === 403) {
+                toast.error('Anda tidak memiliki izin untuk mengubah data anggota ini');
+            } else if (error.response?.status === 404) {
+                toast.error('Anggota keluarga tidak ditemukan');
+            } else {
+                toast.error('Gagal memperbarui data anggota keluarga');
+            }
+        }
+    });
 
-        // Utility functions
-        formatKKNumber,
-        validateKKFormat,
-        getRelationshipText,
-        getRegistrationStatusText,
-        sortMembersByHierarchy,
-
-        // Cache management
-        invalidateAllKKData,
-        queryClient
+    // Check Delete Permission Query
+    const useDeletePermission = (ktpId) => {
+        return useQuery({
+            queryKey: ['delete-permission', ktpId],
+            queryFn: () => userKtpService.checkDeletePermission(ktpId),
+            enabled: !!ktpId,
+            staleTime: 30 * 1000, // 30 seconds
+            onError: (error) => {
+                console.error('Failed to check delete permission:', error);
+            }
+        });
     };
+
+    // ===== CALLBACK FUNCTIONS =====
+
+    const deleteFamilyMember = useCallback((ktpId) => {
+        if (!ktpId) {
+            toast.error('ID anggota keluarga tidak valid');
+            return Promise.reject(new Error('Invalid KTP ID'));
+        }
+        
+        return deleteFamilyMemberMutation.mutateAsync(ktpId);
+    }, [deleteFamilyMemberMutation]);
+
+    const addFamilyMember = useCallback((memberData) => {
+        if (!memberData) {
+            toast.error('Data anggota keluarga wajib diisi');
+            return Promise.reject(new Error('Member data required'));
+        }
+        
+        return addFamilyMemberMutation.mutateAsync(memberData);
+    }, [addFamilyMemberMutation]);
+
+    const updateFamilyMember = useCallback(({ ktpId, updateData }) => {
+        if (!ktpId || !updateData) {
+            toast.error('Data tidak lengkap');
+            return Promise.reject(new Error('Incomplete data'));
+        }
+        
+        return updateFamilyMemberMutation.mutateAsync({ ktpId, updateData });
+    }, [updateFamilyMemberMutation]);
+
+    const canDeleteMember = useCallback((member) => {
+        if (!member) return false;
+        
+        // Cannot delete head of family
+        if (member.is_kepala_keluarga) {
+            return false;
+        }
+        
+        // Cannot delete members who already have user accounts
+        if (member.has_user_account) {
+            return false;
+        }
+        
+        return true;
+    }, []);
+
+// Tambahkan di return object, ganti yang sebelumnya
+return {
+     // Family data
+    familyData,
+    familyStats,
+    familyLoading: myFamilyQuery.isLoading,
+    familyError: myFamilyQuery.error,
+    refreshMyFamily,
+
+    // Mutations
+    validateKK,
+    isValidatingKK: validateKKMutation.isLoading,
+    validateKKError: validateKKMutation.error,
+
+    // Query hooks for components
+    useKKDetails,
+    useKKStatistics,
+    useKKAvailability,
+
+    // Utility functions
+    formatKKNumber,
+    validateKKFormat,
+    getRelationshipText,
+    getRegistrationStatusText,
+    sortMembersByHierarchy,
+
+    // Cache management
+    invalidateAllKKData,
+    queryClient,
+    
+    // Family member operations
+    addFamilyMember,
+    updateFamilyMember,
+    deleteFamilyMember,
+    canDeleteMember,
+    
+    // Query hooks
+    useDeletePermission,
+    
+    // Loading states
+    isAddingMember: addFamilyMemberMutation.isLoading,
+    isUpdatingMember: updateFamilyMemberMutation.isLoading,
+    isDeletingMember: deleteFamilyMemberMutation.isLoading,
+    
+    // Error states
+    addMemberError: addFamilyMemberMutation.error,
+    updateMemberError: updateFamilyMemberMutation.error,
+    deleteMemberError: deleteFamilyMemberMutation.error,
+    
+    // ... rest of existing returns
+};
+
+    // ===== RETURN OBJECT =====
+    // return {
+    //     // Family data
+    //     familyData,
+    //     familyStats,
+    //     familyLoading: myFamilyQuery.isLoading,
+    //     familyError: myFamilyQuery.error,
+    //     refreshMyFamily,
+
+    //     // Mutations
+    //     validateKK,
+    //     isValidatingKK: validateKKMutation.isLoading,
+    //     validateKKError: validateKKMutation.error,
+
+    //     // Query hooks for components
+    //     useKKDetails,
+    //     useKKStatistics,
+    //     useKKAvailability,
+
+    //     // Utility functions
+    //     formatKKNumber,
+    //     validateKKFormat,
+    //     getRelationshipText,
+    //     getRegistrationStatusText,
+    //     sortMembersByHierarchy,
+
+    //     // Cache management
+    //     invalidateAllKKData,
+    //     queryClient
+    // };
 };

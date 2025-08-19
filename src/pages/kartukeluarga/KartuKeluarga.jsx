@@ -139,7 +139,7 @@ const KartuKeluarga = () => {
                             </div>
                             <div>
                                 <h2 className="text-xl font-semibold text-gray-900">Informasi Kartu Keluarga</h2>
-                                <p className="text-sm text-gray-600">No. KK: {kk.no_kk}</p>
+                                <p className="text-sm text-gray-600">No. KK: {kk.no}</p>
                             </div>
                         </div>
                         <div className="text-right">
@@ -167,7 +167,7 @@ const KartuKeluarga = () => {
                             <div className="flex items-start">
                                 <MapPin className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
                                 <div className="text-sm text-gray-600">
-                                    <p>{kk.alamat}</p>
+                                    <p>{kk.address}</p>
                                     <p className="text-xs text-gray-500">
                                         RT {kk.rt_no?.toString().padStart(2, '0')} / 
                                         RW {kk.rw_no?.toString().padStart(2, '0')}
