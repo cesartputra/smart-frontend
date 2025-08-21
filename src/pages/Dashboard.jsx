@@ -355,13 +355,13 @@ const Dashboard = () => {
                                 </button> */}
 
                                 {/* // Profile Menu */}
-                                {/* <NavigationCard
+                                <NavigationCard
                                     to="/profile"
                                     icon={User}
                                     title="Profil Saya"
                                     description="Lihat dan edit informasi pribadi"
                                     color="indigo"
-                                /> */}
+                                />
 
                                 {/* Surat Pengantar Menu */}
                                 <NavigationCard
