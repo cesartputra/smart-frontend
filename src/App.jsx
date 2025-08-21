@@ -21,7 +21,7 @@ import RTDashboard from './pages/suratPengantar/RTDashboard';
 import RWDashboard from './pages/suratPengantar/RWDashboard';
 import AdminSuratPengantarDashboard from './pages/suratPengantar/AdminSuratPengantarDashboard';
 import QRCodeVerification from './pages/suratPengantar/QRCodeVerification';
-import KartuKeluarga from './pages/kartuKeluarga/KartuKeluarga';
+import KartuKeluarga from './pages/kartukeluarga/KartuKeluarga';
 
 // Test Page Component
 const TestPage = () => (
