@@ -22,6 +22,7 @@ import RWDashboard from './pages/suratPengantar/RWDashboard';
 import AdminSuratPengantarDashboard from './pages/suratPengantar/AdminSuratPengantarDashboard';
 import QRCodeVerification from './pages/suratPengantar/QRCodeVerification';
 import KartuKeluarga from './pages/kartukeluarga/KartuKeluarga';
+import Profile from './pages/profile/Profile';
 
 // Test Page Component
 const TestPage = () => (
@@ -186,6 +187,18 @@ function App() {
                         </ProtectedRoute>
                     } 
                 />
+
+                {/* ========================================
+                    PROFILE ROUTES
+                    ======================================== */}
+                {/* <Route 
+                    path="/profile" 
+                    element={
+                        <ProtectedRoute requiresKTP requiresUserDetails>
+                            <Profile />
+                        </ProtectedRoute>
+                    } 
+                /> */}
 
                 {/* ========================================
                     KARTU KELUARGA ROUTES

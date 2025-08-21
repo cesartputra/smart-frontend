@@ -342,7 +342,7 @@ const Dashboard = () => {
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {/* Profile Menu */}
-                                <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
+                                {/* <button className="p-4 text-left border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                                     <div className="flex items-center">
                                         <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
                                             <User className="h-5 w-5 text-blue-600" />
@@ -352,7 +352,16 @@ const Dashboard = () => {
                                             <p className="text-sm text-gray-500">Kelola data pribadi</p>
                                         </div>
                                     </div>
-                                </button>
+                                </button> */}
+
+                                {/* // Profile Menu */}
+                                {/* <NavigationCard
+                                    to="/profile"
+                                    icon={User}
+                                    title="Profil Saya"
+                                    description="Lihat dan edit informasi pribadi"
+                                    color="indigo"
+                                /> */}
 
                                 {/* Surat Pengantar Menu */}
                                 <NavigationCard

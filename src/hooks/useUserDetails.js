@@ -1,4 +1,4 @@
-// src/hooks/useUserDetails.js
+// src/hooks/useUserDetails.js - Enhanced with fetch functionality
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -8,6 +8,23 @@ import useAuthStore from '../store/authStore';
 export const useUserDetails = () => {
     const navigate = useNavigate();
     const { updateUser, getNextRequiredStep } = useAuthStore();
+
+    // Get user details query - ENHANCED
+    const userDetailsQuery = useQuery({
+        queryKey: ['user-details'],
+        queryFn: userDetailsService.getUserDetails,
+        retry: 1, // Only retry once for 404 errors (normal for new users)
+        retryOnMount: false,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
+        onError: (error) => {
+            // Don't show error toast for 404 (user details not found)
+            // This is normal for new users completing profile
+            if (error.response?.status !== 404) {
+                console.error('❌ Get user details error:', error);
+            }
+        }
+    });
 
     // Create user details mutation
     const createUserDetailsMutation = useMutation({
@@ -19,6 +36,9 @@ export const useUserDetails = () => {
             updateUser({ hasCompletedUserDetails: true });
             
             toast.success('Profil berhasil dilengkapi!');
+            
+            // Invalidate query to refresh data
+            userDetailsQuery.refetch();
             
             // Navigate to next required step (should be dashboard now)
             const nextStep = getNextRequiredStep();
@@ -32,14 +52,14 @@ export const useUserDetails = () => {
         },
     });
 
-    // Update user details mutation
+    // Update user details mutation - ENHANCED
     const updateUserDetailsMutation = useMutation({
         mutationFn: userDetailsService.updateUserDetails,
         onSuccess: (data) => {
             console.log('✅ User details updated successfully:', data);
             toast.success('Profil berhasil diperbarui!');
             
-            // Refetch user details query
+            // Invalidate and refetch user details query
             userDetailsQuery.refetch();
         },
         onError: (error) => {
@@ -49,30 +69,15 @@ export const useUserDetails = () => {
         },
     });
 
-    // Get user details query
-    const userDetailsQuery = useQuery({
-        queryKey: ['user-details'],
-        queryFn: userDetailsService.getUserDetails,
-        enabled: false, // Only fetch when explicitly called
-        retry: 1, // Only retry once for 404 errors (normal for new users)
-        retryOnMount: false,
-        onError: (error) => {
-            // Don't show error toast for 404 (user details not found)
-            // This is normal for new users completing profile
-            if (error.response?.status !== 404) {
-                console.error('❌ Get user details error:', error);
-            }
-        }
-    });
-
     return {
         // Actions
         createUserDetails: createUserDetailsMutation.mutate,
         updateUserDetails: updateUserDetailsMutation.mutate,
         getUserDetails: userDetailsQuery.refetch,
+        fetchUserDetails: userDetailsQuery.refetch, // Alias for consistency
         
         // Data
-        userDetails: userDetailsQuery.data?.details,
+        userDetails: userDetailsQuery.data?.details || userDetailsQuery.data?.data || null,
         
         // Loading states
         isLoading: createUserDetailsMutation.isPending || updateUserDetailsMutation.isPending,
@@ -81,7 +86,12 @@ export const useUserDetails = () => {
         isFetching: userDetailsQuery.isFetching,
         
         // Query info
-        hasUserDetails: !!userDetailsQuery.data?.details,
-        fetchUserDetails: () => userDetailsQuery.refetch(),
+        hasUserDetails: !!userDetailsQuery.data,
+        isError: userDetailsQuery.isError,
+        error: userDetailsQuery.error,
+        
+        // Query status
+        isSuccess: userDetailsQuery.isSuccess,
+        isInitialLoading: userDetailsQuery.isInitialLoading,
     };
 };

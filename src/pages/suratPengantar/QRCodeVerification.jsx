@@ -241,6 +241,13 @@ const QRCodeVerification = () => {
                                             </label>
                                             <p className="text-gray-900">{data.city_name}</p>
                                         </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-500 mb-1">
+                                                Provinsi
+                                            </label>
+                                            <p className="text-gray-900">{data.province_name}</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
