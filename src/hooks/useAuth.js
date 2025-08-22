@@ -385,13 +385,169 @@ export const useAuth = () => {
         navigate(path, { replace: true, ...options });
     };
 
-    return {
-        user,
-        isAuthenticated,
-        sessionInfo: getSessionInfo(),
-        hasPendingDownload: hasPendingDownload(),
+    const forgotPasswordMutation = useMutation({
+        mutationFn: authService.forgotPassword,
+        onSuccess: (data) => {
+            console.log('✅ Forgot password request sent successfully');
+            toast.success('Email reset password telah dikirim ke alamat email Anda');
+        },
+        onError: (error) => {
+            console.error('❌ Forgot password failed:', error);
+            const message = error.response?.data?.message || 'Gagal mengirim email reset password';
+            toast.error(message);
+        },
+    });
+
+    // Verify Reset Token mutation
+    const verifyResetTokenMutation = useMutation({
+        mutationFn: authService.verifyResetToken,
+        onError: (error) => {
+            console.error('❌ Token verification failed:', error);
+        },
+    });
+
+    // Reset Password mutation
+    const resetPasswordMutation = useMutation({
+        mutationFn: ({ token, password }) => authService.resetPassword(token, password),
+        onSuccess: (data) => {
+            console.log('✅ Password reset successfully');
+            toast.success('Password berhasil direset');
+        },
+        onError: (error) => {
+            console.error('❌ Password reset failed:', error);
+            const message = error.response?.data?.message || 'Gagal mereset password';
+            toast.error(message);
+        },
+    });
+
+    // Change Password mutation (untuk user yang sudah login)
+    const changePasswordMutation = useMutation({
+        mutationFn: ({ currentPassword, newPassword, confirmPassword }) => 
+            authService.changePassword(currentPassword, newPassword, confirmPassword),
+        onSuccess: (data) => {
+            console.log('✅ Password changed successfully');
+            toast.success('Password berhasil diubah');
+        },
+        onError: (error) => {
+            console.error('❌ Password change failed:', error);
+            const message = error.response?.data?.message || 'Gagal mengubah password';
+            toast.error(message);
+        },
+    });
+
+    const getLoadingStates = () => {
+        return {
+            // General loading state (untuk backward compatibility)
+            isLoading: signUpMutation.isPending || 
+                    signInMutation.isPending || 
+                    verifyEmailMutation.isPending || 
+                    resendVerificationMutation.isPending ||
+                    forgotPasswordMutation.isPending ||
+                    resetPasswordMutation.isPending ||
+                    changePasswordMutation.isPending,
+            
+            // Specific loading states
+            isSigningUp: signUpMutation.isPending,
+            isSigningIn: signInMutation.isPending,
+            isVerifyingEmail: verifyEmailMutation.isPending,
+            isResendingVerification: resendVerificationMutation.isPending,
+            isLoggingOut: logoutMutation.isPending || logoutAllMutation.isPending,
+            isRefreshingToken: refreshTokenMutation.isPending,
+            
+            // Password related loading states
+            isForgotPasswordLoading: forgotPasswordMutation.isPending,
+            isVerifyingToken: verifyResetTokenMutation.isPending,
+            isResettingPassword: resetPasswordMutation.isPending,
+            isUpdatingPassword: changePasswordMutation.isPending,
+            
+            // Profile loading
+            profileLoading: profileQuery.isLoading,
+        };
+    };
+
+    const getErrorStates = () => {
+        return {
+            signUpError: signUpMutation.error,
+            signInError: signInMutation.error,
+            verifyEmailError: verifyEmailMutation.error,
+            resendVerificationError: resendVerificationMutation.error,
+            logoutError: logoutMutation.error,
+            refreshTokenError: refreshTokenMutation.error,
+            forgotPasswordError: forgotPasswordMutation.error,
+            resetPasswordError: resetPasswordMutation.error,
+            changePasswordError: changePasswordMutation.error,
+            profileError: profileQuery.error,
+        };
+    };
+
+    // Perbaikan 3: Session management helper yang lebih robust
+    const getSessionStatus = () => {
+        const sessionInfo = getSessionInfo();
+        return {
+            ...sessionInfo,
+            isActive: isAuthenticated && sessionInfo.timeUntilExpiry > 0,
+            needsRefresh: sessionInfo.timeUntilExpiry !== null && sessionInfo.timeUntilExpiry <= 15, // 15 menit
+            isWarningZone: sessionInfo.isExpiringSoon,
+            shouldAutoExtend: sessionInfo.timeUntilExpiry !== null && sessionInfo.timeUntilExpiry <= 10 && sessionInfo.timeUntilExpiry > 0
+        };
+    };
+
+    // Perbaikan 4: Password policy helper
+    const getPasswordPolicy = () => {
+        return {
+            minLength: 8,
+            requireUppercase: true,
+            requireLowercase: true,
+            requireNumbers: true,
+            requireSpecialChars: true,
+            specialCharsPattern: '@$!%*?&',
+            validationRegex: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+        };
+    };
+
+    // Perbaikan 5: Enhanced auth state helper
+    const getAuthState = () => {
+        return {
+            isAuthenticated,
+            user,
+            isEmailVerified: user?.isEmailVerified || false,
+            hasCompletedKTP: user?.hasCompletedKTP || false,
+            hasCompletedUserDetails: user?.hasCompletedUserDetails || false,
+            needsEmailVerification: isAuthenticated && !user?.isEmailVerified,
+            needsKTPCompletion: isAuthenticated && user?.isEmailVerified && !user?.hasCompletedKTP,
+            needsProfileCompletion: isAuthenticated && user?.isEmailVerified && user?.hasCompletedKTP && !user?.hasCompletedUserDetails,
+            isProfileComplete: isAuthenticated && user?.isEmailVerified && user?.hasCompletedKTP && user?.hasCompletedUserDetails,
+        };
+    };
+
+    // Perbaikan 6: Utility functions untuk download handling
+    const getDownloadState = () => {
+        const intendedUrl = localStorage.getItem('intendedUrl');
+        const urlParams = new URLSearchParams(window.location.search);
+        const isDownloadRedirect = urlParams.get('redirect') === 'download';
+        const downloadId = urlParams.get('id');
         
-        // Auth actions
+        return {
+            hasPendingDownload: (intendedUrl && intendedUrl.includes('/download')) || isDownloadRedirect,
+            pendingDownloadId: downloadId,
+            intendedUrl,
+            isDownloadFlow: isDownloadRedirect,
+        };
+    };
+
+    return {
+        // ============ AUTH STATE ============
+        ...getAuthState(),
+        
+        // ============ SESSION MANAGEMENT ============
+        sessionInfo: getSessionStatus(),
+        extendSession: handleExtendSession,
+        refreshToken: refreshTokenMutation.mutate,
+        
+        // ============ DOWNLOAD HANDLING ============
+        ...getDownloadState(),
+        
+        // ============ AUTH ACTIONS ============
         signUp: signUpMutation.mutate,
         signIn: signInMutation.mutate,
         verifyEmail: async (token) => {
@@ -407,28 +563,49 @@ export const useAuth = () => {
         },
         resendVerification: resendVerificationMutation.mutate,
         
-        // Logout actions
+        // ============ LOGOUT ACTIONS ============
         logout: handleLogout,
         logoutAll: handleLogoutAll,
         
-        // Session management
-        extendSession: handleExtendSession,
-        refreshToken: refreshTokenMutation.mutate,
+        // ============ PASSWORD ACTIONS ============
+        forgotPassword: forgotPasswordMutation.mutate,
+        verifyResetToken: verifyResetTokenMutation.mutate,
+        resetPassword: (token, password) => resetPasswordMutation.mutate({ token, password }),
+        updatePassword: ({ currentPassword, newPassword }) => 
+            changePasswordMutation.mutate({ currentPassword, newPassword, confirmPassword: newPassword }),
         
-        // Navigation helpers
+        // ============ NAVIGATION HELPERS ============
         redirectTo: handleManualRedirect,
         handlePostLoginRedirect,
+        getNextRequiredStep,
         
-        // Loading states
-        isLoading: signUpMutation.isPending || signInMutation.isPending || 
-                    verifyEmailMutation.isPending || resendVerificationMutation.isPending,
-        isLoggingOut: logoutMutation.isPending || logoutAllMutation.isPending,
-        profileLoading: profileQuery.isLoading,
-        isRefreshingToken: refreshTokenMutation.isPending,
+        // ============ LOADING STATES ============
+        ...getLoadingStates(),
         
-        // Error states
-        signUpError: signUpMutation.error,
-        signInError: signInMutation.error,
-        verifyEmailError: verifyEmailMutation.error,
+        // ============ ERROR STATES ============
+        ...getErrorStates(),
+        
+        // ============ UTILITIES ============
+        passwordPolicy: getPasswordPolicy(),
+        
+        // ============ MUTATION OBJECTS (untuk advanced usage) ============
+        mutations: {
+            signUp: signUpMutation,
+            signIn: signInMutation,
+            verifyEmail: verifyEmailMutation,
+            resendVerification: resendVerificationMutation,
+            logout: logoutMutation,
+            logoutAll: logoutAllMutation,
+            refreshToken: refreshTokenMutation,
+            forgotPassword: forgotPasswordMutation,
+            verifyResetToken: verifyResetTokenMutation,
+            resetPassword: resetPasswordMutation,
+            changePassword: changePasswordMutation,
+        },
+        
+        // ============ QUERIES ============
+        queries: {
+            profile: profileQuery,
+        },
     };
 };

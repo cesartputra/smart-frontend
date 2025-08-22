@@ -23,6 +23,8 @@ import AdminSuratPengantarDashboard from './pages/suratPengantar/AdminSuratPenga
 import QRCodeVerification from './pages/suratPengantar/QRCodeVerification';
 import KartuKeluarga from './pages/kartukeluarga/KartuKeluarga';
 import Profile from './pages/profile/Profile';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 // Test Page Component
 const TestPage = () => (
@@ -152,6 +154,10 @@ function App() {
                 
                 {/* ✅ FIXED: QR Code Verification - Public route dengan URL yang benar */}
                 <Route path="/verify/:token" element={<QRCodeVerification />} />
+
+                {/* Password Reset Routes - Public access */}
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password/:token" element={<ResetPassword />} />
 
                 {/* ========================================
                     PROFILE COMPLETION ROUTES

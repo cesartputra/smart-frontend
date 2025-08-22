@@ -86,6 +86,64 @@ const authService = {
         throw error;
         }
     },
+
+    // Forgot Password - Send reset email
+    forgotPassword: async (email) => {
+        console.log('AuthService.forgotPassword called with email:', email);
+        try {
+            const response = await api.post('/api/auth/forgot-password', { email });
+            console.log('ForgotPassword response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('AuthService.forgotPassword error:', error);
+            throw error;
+        }
+    },
+
+    // Verify Reset Token
+    verifyResetToken: async (token) => {
+        console.log('AuthService.verifyResetToken called with token:', token);
+        try {
+            const response = await api.get(`/api/auth/verify-reset-token/${token}`);
+            console.log('VerifyResetToken response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('AuthService.verifyResetToken error:', error);
+            throw error;
+        }
+    },
+
+    // Reset Password - Set new password using token
+    resetPassword: async (token, newPassword) => {
+        console.log('AuthService.resetPassword called with token:', token);
+        try {
+            const response = await api.post(`/api/auth/reset-password/${token}`, {
+                password: newPassword
+            });
+            console.log('ResetPassword response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('AuthService.resetPassword error:', error);
+            throw error;
+        }
+    },
+
+    // Change Password - For authenticated users
+    changePassword: async (currentPassword, newPassword, confirmPassword) => {
+        console.log('AuthService.changePassword called');
+        try {
+            const response = await api.post('/api/auth/change-password', {
+                oldPassword: currentPassword,
+                newPassword: newPassword,
+                confirmPassword: confirmPassword
+            });
+            console.log('ChangePassword response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('AuthService.changePassword error:', error);
+            throw error;
+        }
+    },
 };
 
 export default authService;
